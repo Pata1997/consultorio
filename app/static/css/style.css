@@ -1,0 +1,133 @@
+/* Estilos personalizados */
+:root {
+    --primary-color: #667eea;
+    --secondary-color: #764ba2;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+.navbar {
+    box-shadow: 0 2px 4px rgba(0,0,0,.1);
+}
+
+.card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.1);
+    margin-bottom: 20px;
+}
+
+.card-header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: white;
+    border-radius: 10px 10px 0 0 !important;
+    padding: 15px 20px;
+}
+
+.btn {
+    border-radius: 5px;
+    padding: 8px 20px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    border: none;
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,.2);
+}
+
+.table {
+    background: white;
+}
+
+.table thead th {
+    border-bottom: 2px solid var(--primary-color);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+.badge {
+    padding: 6px 12px;
+    font-weight: 500;
+    border-radius: 4px;
+}
+
+.alert {
+    border-radius: 8px;
+    border: none;
+}
+
+/* Animaciones */
+.card, .btn {
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,.15);
+}
+
+/* Formularios */
+.form-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+}
+
+.form-control, .form-select {
+    border-radius: 5px;
+    border: 1px solid #ced4da;
+    padding: 10px 15px;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, .25);
+}
+
+/* Estados de citas */
+.badge.bg-warning {
+    background-color: var(--warning-color) !important;
+}
+
+.badge.bg-success {
+    background-color: var(--success-color) !important;
+}
+
+.badge.bg-danger {
+    background-color: var(--danger-color) !important;
+}
+
+.badge.bg-info {
+    background-color: var(--info-color) !important;
+}
+
+/* Tarjetas de estadísticas */
+.card.bg-primary, .card.bg-success, .card.bg-warning, .card.bg-info {
+    border: none;
+    color: white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .card {
+        margin-bottom: 15px;
+    }
+    
+    .table-responsive {
+        font-size: 0.9rem;
+    }
+}

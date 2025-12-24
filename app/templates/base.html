@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sistema Consultorio Médico{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% if current_user.is_authenticated %}
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('main.index') }}">
+                <i class="bi bi-hospital"></i> Consultorio Médico
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.index') }}">
+                            <i class="bi bi-house"></i> Inicio
+                        </a>
+                    </li>
+                    
+                    {% if current_user.rol in ['recepcionista', 'admin'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-calendar-check"></i> Agendamiento
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('agendamiento.nueva_cita') }}">Nueva Cita</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('agendamiento.listar_citas') }}">Ver Citas</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('agendamiento.nuevo_paciente') }}">Nuevo Paciente</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('agendamiento.listar_pacientes') }}">Ver Pacientes</a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                    
+                    {% if current_user.rol == 'medico' %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-clipboard-pulse"></i> Consultorio
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('consultorio.mis_citas_hoy') }}">Mis Citas Hoy</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('consultorio.mis_consultas') }}">Mis Consultas</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('consultorio.listar_insumos') }}">Insumos</a></li>
+                        </ul>
+                    </li>
+                    {% elif current_user.rol == 'admin' %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-clipboard-pulse"></i> Consultorio
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('consultorio.listar_consultas') }}">Consultas</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('consultorio.listar_insumos') }}">Insumos</a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                    
+                    {% if current_user.rol in ['admin', 'cajero'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-cash-stack"></i> Facturación
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('facturacion.estado_caja') }}">Caja</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('facturacion.ventas_pendientes') }}">Ventas pendientes</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('facturacion.listar_ventas') }}">Ventas</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('facturacion.reporte_ventas') }}">Reportes</a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                    
+                    {% if current_user.rol == 'admin' %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-people"></i> RRHH
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_vacaciones') }}">Vacaciones</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_permisos') }}">Permisos</a></li>
+                            {% if current_user.rol == 'admin' %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_horarios') }}"><i class="bi bi-calendar-week"></i> Horarios de Atención</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_asistencias') }}">Asistencias</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_medicos') }}">Médicos</a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                    {% endif %}
+                    
+                    {# Admin: link para gestionar precios de procedimientos #}
+                    {% if current_user.rol == 'admin' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('consultorio.gestionar_precios') }}">
+                            <i class="bi bi-tag"></i> Precios Procedimientos
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% if current_user.rol == 'admin' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('configuracion.ver_configuracion') }}">
+                            <i class="bi bi-gear"></i> Configuración
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> {{ current_user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#"><i class="bi bi-gear"></i> Perfil</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right"></i> Cerrar Sesión</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+    
+    <div class="container-fluid mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </div>
+    
+    <!-- Modal Global para Mensajes -->
+    <div class="modal fade" id="mensajeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="mensajeModalTitulo">Mensaje</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="mensajeModalCuerpo">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Global para Confirmaciones -->
+    <div class="modal fade" id="confirmarModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmarModalTitulo">Confirmar</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="confirmarModalCuerpo">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" id="confirmarModalBoton">Confirmar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

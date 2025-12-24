@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Consultas Médicas{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="bi bi-clipboard-pulse"></i> Consultas Médicas</h4>
+            </div>
+            <div class="card-body">
+                <!-- Filtros -->
+                <form method="GET" class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <label for="paciente" class="form-label">Paciente</label>
+                        <input type="text" class="form-control" id="paciente" name="paciente" 
+                               placeholder="Nombre o cédula" value="{{ paciente_buscar or '' }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="fecha_desde" class="form-label">Desde</label>
+                        <input type="date" class="form-control" id="fecha_desde" name="fecha_desde" 
+                               value="{{ fecha_desde or '' }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="fecha_hasta" class="form-label">Hasta</label>
+                        <input type="date" class="form-control" id="fecha_hasta" name="fecha_hasta" 
+                               value="{{ fecha_hasta or '' }}">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-secondary me-2">
+                            <i class="bi bi-funnel"></i> Filtrar
+                        </button>
+                        <a href="{{ url_for('consultorio.listar_consultas') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Limpiar
+                        </a>
+                    </div>
+                </form>
+
+                <!-- Tabla de consultas -->
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Paciente</th>
+                                <th>Médico</th>
+                                <th>Especialidad</th>
+                                <th>Diagnóstico</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if consultas %}
+                                {% for consulta in consultas %}
+                                <tr>
+                                    <td>{{ consulta.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
+                                    <td>
+                                        <strong>{{ consulta.paciente.nombre_completo }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ consulta.paciente.cedula }}</small>
+                                    </td>
+                                    <td>Dr./Dra. {{ consulta.medico.nombre }} {{ consulta.medico.apellido }}</td>
+                                    <td>{{ consulta.especialidad.nombre }}</td>
+                                    <td>
+                                        {{ consulta.diagnostico[:50] }}{% if consulta.diagnostico|length > 50 %}...{% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('consultorio.ver_consulta', id=consulta.id) }}" 
+                                               class="btn btn-outline-primary" 
+                                               title="Ver detalles">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            <a href="{{ url_for('consultorio.editar_consulta', id=consulta.id) }}" 
+                                               class="btn btn-outline-secondary" 
+                                               title="Editar">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">
+                                        No hay consultas registradas
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

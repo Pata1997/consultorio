@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Sistema Consultorio{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-speedometer2"></i> Dashboard</h2>
+        <p class="text-muted">Bienvenido, {{ current_user.username }} ({{ current_user.rol }})</p>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <!-- Tarjetas de estadísticas -->
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-uppercase">Citas Hoy</h6>
+                        <h2>{{ citas_hoy }}</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-calendar-check" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-uppercase">Pendientes</h6>
+                        <h2>{{ citas_pendientes }}</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-clock-history" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-uppercase">Confirmadas</h6>
+                        <h2>{{ citas_confirmadas }}</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-check-circle" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-uppercase">Atenciones</h6>
+                        <h2>0</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-clipboard-pulse" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tarjeta de Citas por Confirmar -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-telephone-fill"></i> Citas por Confirmar (Mañana)
+                    </h5>
+                    <span class="badge bg-white text-warning" style="font-size: 1.2rem;">
+                        {{ citas_por_confirmar }}
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="mb-2">
+                    <i class="bi bi-info-circle"></i> 
+                    Hay <strong>{{ citas_por_confirmar }}</strong> cita(s) pendiente(s) para mañana que requieren confirmación con el paciente.
+                </p>
+                <a href="{{ url_for('agendamiento.citas_por_confirmar') }}" class="btn btn-warning">
+                    <i class="bi bi-telephone-forward"></i> Ver Citas por Confirmar
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-calendar3"></i> Citas de Hoy</h5>
+            </div>
+            <div class="card-body">
+                {% if citas_proximas %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Paciente</th>
+                                <th>Médico</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cita in citas_proximas %}
+                            <tr>
+                                <td>{{ cita.hora.strftime('%H:%M') }}</td>
+                                <td>{{ cita.paciente.nombre_completo }}</td>
+                                <td>{{ cita.medico.nombre_completo }}</td>
+                                <td>
+                                    {% if cita.estado == 'pendiente' %}
+                                    <span class="badge bg-warning">Pendiente</span>
+                                    {% elif cita.estado == 'confirmada' %}
+                                    <span class="badge bg-success">Confirmada</span>
+                                    {% elif cita.estado == 'completada' %}
+                                    <span class="badge bg-info">Completada</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if cita.estado == 'confirmada' and current_user.rol == 'medico' %}
+                                    <a href="{{ url_for('consultorio.nueva_consulta', cita_id=cita.id) }}" 
+                                       class="btn btn-sm btn-primary">
+                                        <i class="bi bi-clipboard-plus"></i> Atender
+                                    </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">No hay citas programadas para hoy</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-lightning"></i> Accesos Rápidos</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    {% if current_user.rol in ['recepcionista', 'admin'] %}
+                    <a href="{{ url_for('agendamiento.nueva_cita') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-calendar-plus"></i> Nueva Cita
+                    </a>
+                    <a href="{{ url_for('agendamiento.nuevo_paciente') }}" class="btn btn-outline-success">
+                        <i class="bi bi-person-plus"></i> Nuevo Paciente
+                    </a>
+                    <a href="{{ url_for('facturacion.estado_caja') }}" class="btn btn-outline-info">
+                        <i class="bi bi-cash-stack"></i> Abrir Caja
+                    </a>
+                    {% endif %}
+                    
+                    {% if current_user.rol == 'medico' %}
+                    <a href="{{ url_for('consultorio.listar_consultas') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-clipboard-pulse"></i> Mis Consultas
+                    </a>
+                    <a href="{{ url_for('rrhh.solicitar_vacacion') }}" class="btn btn-outline-warning">
+                        <i class="bi bi-calendar-x"></i> Solicitar Vacaciones
+                    </a>
+                    <a href="{{ url_for('rrhh.solicitar_permiso') }}" class="btn btn-outline-info">
+                        <i class="bi bi-clock"></i> Solicitar Permiso
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

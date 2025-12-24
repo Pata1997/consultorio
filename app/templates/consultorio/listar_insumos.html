@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Insumos Médicos{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4><i class="bi bi-bandaid"></i> Gestión de Insumos Médicos</h4>
+                {# Ocultar botón de creación para médicos: solo personal administrativo puede crear insumos #}
+                {% if not (current_user and current_user.rol == 'medico') %}
+                <a href="{{ url_for('consultorio.nuevo_insumo') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Nuevo Insumo
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <!-- Filtros -->
+                <form method="GET" class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label for="busqueda" class="form-label">Buscar (Código, Nombre o Categoría)</label>
+                        <input type="text" class="form-control" id="busqueda" name="busqueda" 
+                               placeholder="Escriba texto para búsqueda aproximada" value="{{ busqueda or '' }}">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-secondary">
+                            <i class="bi bi-funnel"></i> Filtrar
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Tabla de insumos -->
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Nombre</th>
+                                <th>Categoría</th>
+                                {% if not (current_user and current_user.rol == 'medico') %}
+                                    <th>Precio</th>
+                                    <th>Stock</th>
+                                {% endif %}
+                                <th>Stock Mínimo</th>
+                                <th>Estado</th>
+                                {% if not (current_user and current_user.rol == 'medico') %}
+                                    <th>Acciones</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if insumos %}
+                                {% for insumo in insumos %}
+                                <tr {% if insumo.cantidad_actual <= insumo.stock_minimo %}class="table-warning"{% endif %}>
+                                    <td><code>{{ insumo.id }}</code></td>
+                                    <td>
+                                        <strong>{{ insumo.nombre }}</strong>
+                                        {% if insumo.descripcion and not (current_user and current_user.rol == 'medico') %}
+                                            <br><small class="text-muted">{{ insumo.descripcion[:50] }}...</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if insumo.categoria == 'medicamento' %}
+                                            <span class="badge bg-info">Medicamento</span>
+                                        {% elif insumo.categoria == 'material' %}
+                                            <span class="badge bg-primary">Material</span>
+                                        {% elif insumo.categoria == 'consumible' %}
+                                            <span class="badge bg-secondary">Consumible</span>
+                                        {% elif insumo.categoria == 'equipo' %}
+                                            <span class="badge bg-success">Equipo</span>
+                                        {% endif %}
+                                    </td>
+                                    {% if not (current_user and current_user.rol == 'medico') %}
+                                    <td>{{ insumo.precio_venta|format_currency }} Gs.</td>
+                                    <td>
+                                        {% if insumo.cantidad_actual <= insumo.stock_minimo %}
+                                            <span class="badge bg-danger">
+                                                <i class="bi bi-exclamation-triangle"></i> {{ insumo.cantidad_actual }}
+                                            </span>
+                                        {% elif insumo.cantidad_actual <= (insumo.stock_minimo * 2) %}
+                                            <span class="badge bg-warning">{{ insumo.cantidad_actual }}</span>
+                                        {% else %}
+                                            <span class="badge bg-success">{{ insumo.cantidad_actual }}</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endif %}
+                                    <td>{{ insumo.stock_minimo }}</td>
+                                    <td>
+                                        {% if insumo.activo %}
+                                            <span class="badge bg-success">Activo</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inactivo</span>
+                                        {% endif %}
+                                    </td>
+                                    {% if not (current_user and current_user.rol == 'medico') %}
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('consultorio.editar_insumo', id=insumo.id) }}" 
+                                               class="btn btn-outline-primary" 
+                                               title="Editar">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            <a href="{{ url_for('consultorio.ajustar_stock', id=insumo.id) }}" 
+                                               class="btn btn-outline-info" 
+                                               title="Ajustar stock">
+                                                <i class="bi bi-box-seam"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">
+                                        No hay insumos registrados
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Alertas de stock bajo -->
+                {# Build a list of insumos with cantidad_actual <= stock_minimo using a namespace
+                   to avoid comparing ints to string literals in selectattr. #}
+                {% set ns = namespace(list=[]) %}
+                {% for it in insumos %}
+                    {% if it.cantidad_actual is not none and it.stock_minimo is not none and it.cantidad_actual <= it.stock_minimo %}
+                        {% set ns.list = ns.list + [it] %}
+                    {% endif %}
+                {% endfor %}
+                {% set stock_bajo = ns.list %}
+                {% if stock_bajo|length > 0 %}
+                <div class="alert alert-warning mt-3">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <strong>Alerta:</strong> Hay {{ stock_bajo|length }} insumo(s) con stock bajo que requieren reposición.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

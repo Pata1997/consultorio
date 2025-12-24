@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Médicos{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4><i class="bi bi-person-badge"></i> Gestión de Médicos</h4>
+                <a href="{{ url_for('rrhh.nuevo_medico') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Nuevo Médico
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Cédula</th>
+                                <th>Registro Profesional</th>
+                                <th>Especialidades</th>
+                                <th>Contacto</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if medicos %}
+                                {% for medico in medicos %}
+                                <tr>
+                                    <td>
+                                        <strong>Dr./Dra. {{ medico.nombre }} {{ medico.apellido }}</strong>
+                                    </td>
+                                    <td>{{ medico.cedula }}</td>
+                                    <td>{{ medico.registro_profesional }}</td>
+                                    <td>
+                                        {% if medico.especialidades %}
+                                            {% for me in medico.especialidades %}
+                                                <span class="badge bg-info">{{ me.especialidad.nombre }}</span>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-muted">Sin especialidad</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if medico.telefono %}
+                                            <i class="bi bi-telephone"></i> {{ medico.telefono }}<br>
+                                        {% endif %}
+                                        {% if medico.email %}
+                                            <i class="bi bi-envelope"></i> {{ medico.email }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if medico.activo %}
+                                            <span class="badge bg-success">Activo</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inactivo</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('rrhh.editar_medico', id=medico.id) }}" 
+                                               class="btn btn-outline-primary" 
+                                               title="Editar">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            <a href="{{ url_for('rrhh.listar_horarios') }}?medico_id={{ medico.id }}" 
+                                               class="btn btn-outline-info" 
+                                               title="Horarios">
+                                                <i class="bi bi-clock"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">
+                                        No hay médicos registrados
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

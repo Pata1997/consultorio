@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Paciente{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="bi bi-person-fill-gear"></i> Editar Paciente</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="formEditarPaciente">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="nombre" class="form-label">Nombre *</label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" 
+                                   value="{{ paciente.nombre }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="apellido" class="form-label">Apellido *</label>
+                            <input type="text" class="form-control" id="apellido" name="apellido" 
+                                   value="{{ paciente.apellido }}" required>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="cedula" class="form-label">Número Documento *</label>
+                            <input type="text" class="form-control" id="cedula" name="cedula" 
+                                   value="{{ paciente.cedula }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="ruc" class="form-label">RUC</label>
+                            <input type="text" class="form-control" id="ruc" name="ruc" value="{{ paciente.ruc or '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="fecha_nacimiento" class="form-label">Fecha de Nacimiento *</label>
+                            <input type="date" class="form-control" id="fecha_nacimiento" name="fecha_nacimiento" 
+                                   value="{{ paciente.fecha_nacimiento }}" required>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="sexo" class="form-label">Sexo *</label>
+                            <select class="form-select" id="sexo" name="sexo" required>
+                                <option value="">Seleccionar...</option>
+                                <option value="M" {% if paciente.sexo == 'M' %}selected{% endif %}>Masculino</option>
+                                <option value="F" {% if paciente.sexo == 'F' %}selected{% endif %}>Femenino</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="tipo_sangre" class="form-label">Tipo de Sangre</label>
+                            <select class="form-select" id="tipo_sangre" name="tipo_sangre">
+                                <option value="">Seleccionar...</option>
+                                <option value="A+" {% if paciente.tipo_sangre == 'A+' %}selected{% endif %}>A+</option>
+                                <option value="A-" {% if paciente.tipo_sangre == 'A-' %}selected{% endif %}>A-</option>
+                                <option value="B+" {% if paciente.tipo_sangre == 'B+' %}selected{% endif %}>B+</option>
+                                <option value="B-" {% if paciente.tipo_sangre == 'B-' %}selected{% endif %}>B-</option>
+                                <option value="AB+" {% if paciente.tipo_sangre == 'AB+' %}selected{% endif %}>AB+</option>
+                                <option value="AB-" {% if paciente.tipo_sangre == 'AB-' %}selected{% endif %}>AB-</option>
+                                <option value="O+" {% if paciente.tipo_sangre == 'O+' %}selected{% endif %}>O+</option>
+                                <option value="O-" {% if paciente.tipo_sangre == 'O-' %}selected{% endif %}>O-</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="telefono" class="form-label">Teléfono</label>
+                            <input type="tel" class="form-control" id="telefono" name="telefono" 
+                                   value="{{ paciente.telefono or '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" 
+                                   value="{{ paciente.email or '' }}">
+                        </div>
+                    </div>
+
+                    <div class="row mt-3">
+                        <div class="col-md-8 mb-3">
+                            <label for="razon_social" class="form-label">Razón Social</label>
+                            <input type="text" class="form-control" id="razon_social" name="razon_social" value="{{ paciente.razon_social or '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="ciudad" class="form-label">Ciudad</label>
+                            <input type="text" class="form-control" id="ciudad" name="ciudad" value="{{ paciente.ciudad or '' }}">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="direccion" class="form-label">Dirección</label>
+                        <textarea class="form-control" id="direccion" name="direccion" rows="2">{{ paciente.direccion or '' }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="alergias" class="form-label">Alergias</label>
+                        <textarea class="form-control" id="alergias" name="alergias" rows="2" 
+                                  placeholder="Describir alergias conocidas...">{{ paciente.alergias or '' }}</textarea>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('agendamiento.listar_pacientes') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Guardar Cambios
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

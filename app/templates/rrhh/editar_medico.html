@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Médico{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 offset-md-1">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="bi bi-pencil"></i> Editar Médico</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <h5 class="border-bottom pb-2 mb-3">Datos Personales</h5>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="nombre" class="form-label">Nombre <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" 
+                                   value="{{ medico.nombre }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="apellido" class="form-label">Apellido <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="apellido" name="apellido" 
+                                   value="{{ medico.apellido }}" required>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="cedula" class="form-label">Cédula <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="cedula" name="cedula" 
+                                   value="{{ medico.cedula }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="registro_profesional" class="form-label">Registro Profesional <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="registro_profesional" name="registro_profesional" 
+                                   value="{{ medico.registro_profesional }}" required>
+                        </div>
+                    </div>
+
+                    <h5 class="border-bottom pb-2 mb-3 mt-4">Datos de Contacto</h5>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="telefono" class="form-label">Teléfono</label>
+                            <input type="text" class="form-control" id="telefono" name="telefono" 
+                                   value="{{ medico.telefono or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="email_medico" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email_medico" name="email_medico" 
+                                   value="{{ medico.email or '' }}">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="fecha_ingreso" class="form-label">Fecha de Ingreso <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="fecha_ingreso" name="fecha_ingreso" 
+                                   value="{{ medico.fecha_ingreso.isoformat() }}" required>
+                        </div>
+                    </div>
+
+                    <h5 class="border-bottom pb-2 mb-3 mt-4">Especialidades</h5>
+                    <div class="mb-3">
+                        <label class="form-label">Seleccione especialidades <span class="text-danger">*</span></label>
+                        <div class="row">
+                            {% for especialidad in especialidades %}
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" 
+                                           name="especialidades" value="{{ especialidad.id }}" 
+                                           id="esp_{{ especialidad.id }}"
+                                           {% if especialidad.id in especialidades_medico %}checked{% endif %}>
+                                    <label class="form-check-label" for="esp_{{ especialidad.id }}">
+                                        {{ especialidad.nombre }}
+                                    </label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{{ url_for('rrhh.listar_medicos') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Guardar Cambios
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

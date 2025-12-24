@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+
+{% block title %}Facturar Consulta{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-file-invoice-dollar"></i> Facturar Consulta</h2>
+                <a href="{{ url_for('facturacion.nueva_venta') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Volver
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Columna izquierda: Datos del paciente y detalles -->
+        <div class="col-lg-7">
+            <!-- Datos del Paciente -->
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-user"></i> Datos del Paciente</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="mb-2"><strong>Nombre:</strong> {{ paciente.nombre_completo }}</p>
+                            <p class="mb-2"><strong>Cédula:</strong> {{ paciente.cedula }}</p>
+                            <p class="mb-2"><strong>RUC:</strong> 
+                                <span id="ruc-display">{{ paciente.ruc or 'Sin RUC' }}</span>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-2"><strong>Razón Social:</strong> 
+                                <span id="razon-display">{{ paciente.razon_social or paciente.nombre_completo }}</span>
+                            </p>
+                            <p class="mb-2"><strong>Dirección:</strong> 
+                                <span id="direccion-display">{{ paciente.direccion_facturacion or paciente.direccion or 'Sin dirección' }}</span>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="editarDatosFactura()">
+                            <i class="fas fa-edit"></i> Editar datos de factura
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detalles de la Consulta -->
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-list"></i> Detalle de la Factura</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Concepto</th>
+                                    <th class="text-center" width="100">Cantidad</th>
+                                    <th class="text-end" width="150">Precio Unit.</th>
+                                    <th class="text-end" width="150">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Consulta -->
+                                <tr>
+                                    <td>
+                                        <strong>Consulta - {{ especialidad.nombre }}</strong><br>
+                                        <small class="text-muted">Médico: {{ consulta.medico.usuario.nombre_completo }}</small>
+                                    </td>
+                                    <td class="text-center">1</td>
+                                    <td class="text-end">{{ precio_consulta|format_currency }} Gs.</td>
+                                    <td class="text-end"><strong>{{ precio_consulta|format_currency }} Gs.</strong></td>
+                                </tr>
+
+                                <!-- Procedimientos -->
+                                {% if procedimientos %}
+                                    {% for proc in procedimientos %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ proc.procedimiento_rel.nombre }}</strong>
+                                            {% if proc.observaciones %}
+                                            <br><small class="text-muted">{{ proc.observaciones }}</small>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">1</td>
+                                        <td class="text-end">{{ proc.precio|format_currency }} Gs.</td>
+                                        <td class="text-end"><strong>{{ proc.precio|format_currency }} Gs.</strong></td>
+                                    </tr>
+                                    {% endfor %}
+                                {% endif %}
+
+                                <!-- Insumos -->
+                                {% if insumos %}
+                                    {% for insumo in insumos %}
+                                    <tr>
+                                        <td>
+                                            {{ insumo.insumo_rel.nombre }}
+                                            <small class="text-muted">({{ insumo.insumo_rel.unidad_medida }})</small>
+                                        </td>
+                                        <td class="text-center">{{ insumo.cantidad }}</td>
+                                        <td class="text-end">{{ insumo.precio_unitario|format_currency }} Gs.</td>
+                                        <td class="text-end"><strong>{{ insumo.subtotal|format_currency }} Gs.</strong></td>
+                                    </tr>
+                                    {% endfor %}
+                                {% endif %}
+
+                                <!-- Totales -->
+                                <tr class="table-light">
+                                    <td colspan="3" class="text-end"><strong>Subtotal (Gravadas 10%):</strong></td>
+                                    <td class="text-end"><strong>{{ subtotal|format_currency }} Gs.</strong></td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td colspan="3" class="text-end"><strong>IVA 10%:</strong></td>
+                                    <td class="text-end"><strong>{{ iva|format_currency }} Gs.</strong></td>
+                                </tr>
+                                <tr class="table-primary">
+                                    <td colspan="3" class="text-end"><h5 class="mb-0"><strong>TOTAL:</strong></h5></td>
+                                    <td class="text-end"><h5 class="mb-0"><strong>{{ total|format_currency }} Gs.</strong></h5></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Columna derecha: Forma de pago -->
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-money-bill-wave"></i> Registrar Pago</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('facturacion.procesar_factura', consulta_id=consulta.id) }}" id="formPago">
+                        <!-- Total a Cobrar -->
+                        <div class="alert alert-info text-center">
+                            <h4 class="mb-0">Total a Cobrar</h4>
+                            <h2 class="mb-0">{{ total|format_currency }} Gs.</h2>
+                            <input type="hidden" name="total" value="{{ total }}" id="totalFactura">
+                        </div>
+
+                        <!-- Datos de Facturación (ocultos) -->
+                        <input type="hidden" name="ruc_factura" id="ruc_factura" value="{{ paciente.ruc or '' }}">
+                        <input type="hidden" name="nombre_factura" id="nombre_factura" value="{{ paciente.razon_social or paciente.nombre_completo }}">
+                        <input type="hidden" name="direccion_factura" id="direccion_factura" value="{{ paciente.direccion_facturacion or paciente.direccion or '' }}">
+
+                        <!-- Pagos: ahora soportamos múltiples formas de pago mediante modal y grilla -->
+                        <input type="hidden" name="pagos_json" id="pagos_json" value="">
+
+                        <!-- Hidden fallback fields (kept for backward compatibility) -->
+                        <input type="hidden" name="monto_efectivo" id="monto_efectivo" value="0">
+                        <input type="hidden" name="monto_debito" id="monto_debito" value="0">
+                        <input type="hidden" name="monto_credito" id="monto_credito" value="0">
+
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-outline-primary w-100" onclick="abrirModalPago()">
+                                <i class="fas fa-plus-circle"></i> Agregar Forma de Pago
+                            </button>
+                        </div>
+
+                        <!-- Grilla de pagos añadidos -->
+                        <div class="mb-3">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered" id="tablaPagos">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Forma</th>
+                                            <th class="text-end" width="150">Monto (Gs.)</th>
+                                            <th class="text-center" width="120">Referencia</th>
+                                            <th class="text-center" width="80">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- filas dinámicas -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Total Recibido -->
+                        <div class="alert alert-secondary">
+                            <div class="d-flex justify-content-between">
+                                <strong>Total Recibido:</strong>
+                                <span id="totalRecibido">0 Gs.</span>
+                            </div>
+                            <div class="d-flex justify-content-between mt-2">
+                                <strong>Diferencia:</strong>
+                                <span id="diferencia" class="text-danger">-{{ total|format_currency }} Gs.</span>
+                            </div>
+                        </div>
+
+                        <!-- Vuelto -->
+                        <div id="vueltoDiv" class="alert alert-success" style="display: none;">
+                            <div class="text-center">
+                                <h5 class="mb-1">Vuelto</h5>
+                                <h3 class="mb-0" id="vuelto">0 Gs.</h3>
+                            </div>
+                        </div>
+
+                        <!-- Observaciones -->
+                        <div class="mb-3">
+                            <label class="form-label">Observaciones</label>
+                            <textarea class="form-control" name="observaciones" rows="2"></textarea>
+                        </div>
+
+                        <!-- Botones -->
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg" id="btnConfirmar" disabled>
+                                <i class="fas fa-check-circle"></i> Confirmar Factura
+                            </button>
+                            <a href="{{ url_for('facturacion.nueva_venta') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para agregar forma de pago -->
+<div class="modal fade" id="modalAgregarPago" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Agregar Pago</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Forma de Pago</label>
+                    <select id="select_forma" class="form-select">
+                        {% for fp in formas_pago %}
+                        <option value="{{ fp.id }}">{{ fp.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Monto (Gs.)</label>
+                    <input type="text" class="form-control currency-input" id="input_monto" value="0">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Referencia (opcional)</label>
+                    <input type="text" class="form-control" id="input_referencia" placeholder="Nro. autorización / referencia">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="agregarPago()">Agregar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para editar datos de factura -->
+<div class="modal fade" id="modalEditarDatos" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Datos de Factura</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">RUC</label>
+                    <input type="text" class="form-control" id="edit_ruc" 
+                           value="{{ paciente.ruc or '' }}" maxlength="20">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Razón Social</label>
+                    <input type="text" class="form-control" id="edit_razon" 
+                           value="{{ paciente.razon_social or paciente.nombre_completo }}" maxlength="200">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Dirección de Facturación</label>
+                    <textarea class="form-control" id="edit_direccion" rows="2">{{ paciente.direccion_facturacion or paciente.direccion or '' }}</textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarDatosFactura()">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const totalFactura = parseFloat('{{ total }}');
+
+    // Pagos array almacenará objetos: { forma_pago_id, forma_nombre (opcional), monto, referencia }
+    let pagos = [];
+
+    function abrirModalPago() {
+        // reset modal inputs
+        document.getElementById('input_monto').value = '0';
+        document.getElementById('input_referencia').value = '';
+        new bootstrap.Modal(document.getElementById('modalAgregarPago')).show();
+    }
+
+    function agregarPago() {
+        const formaId = document.getElementById('select_forma').value;
+        const formaNombre = document.getElementById('select_forma').options[document.getElementById('select_forma').selectedIndex].text;
+        const montoRaw = document.getElementById('input_monto').value || '0';
+        const monto = parseFloat(parseFormattedNumberToPlain(montoRaw)) || 0;
+        const referencia = document.getElementById('input_referencia').value || '';
+
+        if (monto <= 0) {
+            alert('Ingrese un monto mayor a 0');
+            return;
+        }
+
+        pagos.push({ forma_pago_id: formaId, forma_nombre: formaNombre, monto: monto, referencia: referencia });
+        renderPagos();
+        updateTotals();
+        bootstrap.Modal.getInstance(document.getElementById('modalAgregarPago')).hide();
+    }
+
+    function quitarPago(index) {
+        pagos.splice(index, 1);
+        renderPagos();
+        updateTotals();
+    }
+
+    function renderPagos() {
+        const tbody = document.querySelector('#tablaPagos tbody');
+        tbody.innerHTML = '';
+        pagos.forEach((p, idx) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${p.forma_nombre || p.forma_pago_id}</td>
+                <td class="text-end">${formatNumber(p.monto)}</td>
+                <td class="text-center">${p.referencia || ''}</td>
+                <td class="text-center"><button type="button" class="btn btn-sm btn-danger" onclick="quitarPago(${idx})">Quitar</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function updateTotals() {
+        const totalRecibido = pagos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+        const diferencia = totalRecibido - totalFactura;
+
+        document.getElementById('totalRecibido').textContent = formatNumber(totalRecibido) + ' Gs.';
+        document.getElementById('diferencia').textContent = formatNumber(diferencia) + ' Gs.';
+
+        const diffElement = document.getElementById('diferencia');
+        if (diferencia < 0) {
+            diffElement.className = 'text-danger';
+        } else if (Math.abs(diferencia) < 0.001) {
+            diffElement.className = 'text-success';
+        } else {
+            diffElement.className = 'text-info';
+        }
+
+        // Vuelto: only meaningful when there's efectivo in payments
+        const vueltoDiv = document.getElementById('vueltoDiv');
+        const efectivoPago = pagos.find(p => (p.forma_nombre || '').toLowerCase().includes('efectivo') || String(p.forma_pago_id).toLowerCase() === 'efectivo');
+        const efectivo = efectivoPago ? parseFloat(efectivoPago.monto) : 0;
+        if (efectivo > 0 && diferencia > 0) {
+            // Vuelto máximo es la diferencia pero cannot exceed efectivo - needed_arbitrary
+            const vuelto = Math.min(diferencia, efectivo);
+            document.getElementById('vuelto').textContent = formatNumber(vuelto) + ' Gs.';
+            vueltoDiv.style.display = 'block';
+        } else {
+            vueltoDiv.style.display = 'none';
+        }
+
+        document.getElementById('btnConfirmar').disabled = totalRecibido < totalFactura;
+    }
+
+    function formatNumber(num) {
+        return Math.round(num).toLocaleString('es-PY');
+    }
+
+    function editarDatosFactura() {
+        new bootstrap.Modal(document.getElementById('modalEditarDatos')).show();
+    }
+
+    function guardarDatosFactura() {
+        const ruc = document.getElementById('edit_ruc').value;
+        const razon = document.getElementById('edit_razon').value;
+        const direccion = document.getElementById('edit_direccion').value;
+        
+        // Actualizar campos ocultos del formulario
+        document.getElementById('ruc_factura').value = ruc;
+        document.getElementById('nombre_factura').value = razon;
+        document.getElementById('direccion_factura').value = direccion;
+        
+        // Actualizar displays
+        document.getElementById('ruc-display').textContent = ruc || 'Sin RUC';
+        document.getElementById('razon-display').textContent = razon;
+        document.getElementById('direccion-display').textContent = direccion || 'Sin dirección';
+        
+        // Cerrar modal
+        bootstrap.Modal.getInstance(document.getElementById('modalEditarDatos')).hide();
+    }
+
+    // Inicializar cálculo
+    renderPagos();
+    updateTotals();
+
+    // Antes de enviar el formulario, serializar los pagos a pagos_json y limpiar campos fallback
+    document.getElementById('formPago').addEventListener('submit', function (e) {
+        // Serializar pagos
+        document.getElementById('pagos_json').value = JSON.stringify(pagos);
+
+        // Reset hidden fallback monto fields to 0 to avoid double counting on server
+        document.getElementById('monto_efectivo').value = 0;
+        document.getElementById('monto_debito').value = 0;
+        document.getElementById('monto_credito').value = 0;
+        // allow form submit
+    });
+</script>
+{% endblock %}

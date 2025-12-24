@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Cajero{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-cash-stack"></i> Dashboard Cajero</h2>
+        <p class="text-muted">Gestión de Caja y Ventas</p>
+    </div>
+</div>
+
+<!-- Estado de Caja -->
+<div class="row mt-4">
+    <div class="col-12">
+        {% if caja_abierta %}
+        <div class="alert alert-success">
+            <h5><i class="bi bi-check-circle-fill"></i> Caja Abierta</h5>
+            <p class="mb-1"><strong>Apertura:</strong> {{ caja_abierta.fecha_apertura.strftime('%d/%m/%Y %H:%M') }}</p>
+            <p class="mb-1"><strong>Monto Inicial:</strong> {{ caja_abierta.monto_inicial|format_currency }} Gs</p>
+            <p class="mb-0"><strong>Total Vendido:</strong> {{ total_mi_caja|format_currency }} Gs</p>
+        </div>
+        {% else %}
+        <div class="alert alert-warning">
+            <h5><i class="bi bi-exclamation-triangle-fill"></i> Caja Cerrada</h5>
+            <p class="mb-3">Debe abrir caja para comenzar a trabajar</p>
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalAbrirCaja">
+                <i class="bi bi-unlock"></i> Abrir Caja
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Estadísticas del Día -->
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-uppercase">Ventas Hoy</h6>
+                        <h2>{{ ventas_hoy }}</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-receipt" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-uppercase">Pagadas</h6>
+                        <h2>{{ ventas_pagadas }}</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-check-circle" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-uppercase">Pendientes</h6>
+                        <h2>{{ ventas_pendientes }}</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-clock-history" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-uppercase">Total Vendido</h6>
+                        <h3>{{ total_vendido_hoy|format_currency }}</h3>
+                        <small>Gs</small>
+                    </div>
+                    <div>
+                        <i class="bi bi-cash-coin" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Acciones Rápidas -->
+<!-- Acciones Rápidas eliminadas para el rol cajero según especificación -->
+
+<!-- Últimas Facturas del Día -->
+{% if ventas_mi_caja %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-clock-history"></i> Últimas Facturas del Día</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Fecha/Hora</th>
+                                <th>Factura</th>
+                                <th>Paciente</th>
+                                <th>Total</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for venta in ventas_mi_caja %}
+                            <tr>
+                                <td>{{ venta.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td><strong>{{ venta.numero_factura }}</strong></td>
+                                <td>{{ venta.paciente.nombre_completo }}</td>
+                                <td><strong>{{ venta.total|format_currency }}</strong> Gs</td>
+                                <td>
+                                    {% if venta.estado == 'pagada' %}
+                                    <span class="badge bg-success">Pagada</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">Pendiente</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('facturacion.ver_venta', id=venta.id) }}" class="btn btn-sm btn-info">
+                                        <i class="bi bi-eye"></i> Ver
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Modal Abrir Caja -->
+<div class="modal fade" id="modalAbrirCaja" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-unlock"></i> Abrir Caja</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('facturacion.abrir_caja') }}">
+                <div class="modal-body">
+               <div class="mb-3">
+               <label for="monto_inicial" class="form-label">Monto Inicial (Gs)</label>
+               <input type="text" class="form-control currency-input" id="monto_inicial" name="monto_inicial" 
+                   required value="0">
+              </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-unlock"></i> Abrir Caja
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Cerrar Caja -->
+{% if caja_abierta %}
+<div class="modal fade" id="modalCerrarCaja" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-lock"></i> Cerrar Caja</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('facturacion.cerrar_caja', id=caja_abierta.id) }}">
+                <div class="modal-body">
+                    <p><strong>Monto Inicial:</strong> {{ caja_abierta.monto_inicial|format_currency }} Gs</p>
+                    <p><strong>Monto Vendido:</strong> {{ total_mi_caja|format_currency }} Gs</p>
+                    <p><strong>Monto Esperado:</strong> {{ (caja_abierta.monto_inicial + total_mi_caja)|format_currency }} Gs</p>
+                    <hr>
+                    <div class="mb-3">
+                        <label for="monto_final" class="form-label">Monto Final en Caja (Gs) *</label>
+               <input type="text" class="form-control currency-input" id="monto_final" name="monto_final" 
+                   required>
+                        <small class="text-muted">Ingrese el efectivo contado en caja</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-lock"></i> Cerrar Caja
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

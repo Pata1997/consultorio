@@ -1,0 +1,450 @@
+{% extends "base.html" %}
+
+{% block title %}Nueva Consulta{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Información del Paciente (Sidebar) -->
+    <div class="col-md-3">
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-person-circle"></i> Paciente</h5>
+            </div>
+            <div class="card-body">
+                <h6><strong>{{ cita.paciente.nombre_completo }}</strong></h6>
+                <hr>
+                <p class="mb-1"><strong>Cédula:</strong> {{ cita.paciente.cedula }}</p>
+                <p class="mb-1"><strong>Edad:</strong> {{ cita.paciente.edad }} años</p>
+                <p class="mb-1"><strong>Sexo:</strong> {{ cita.paciente.sexo }}</p>
+                {% if cita.paciente.tipo_sangre %}
+                <p class="mb-1"><strong>Tipo Sangre:</strong> <span class="badge bg-danger">{{ cita.paciente.tipo_sangre }}</span></p>
+                {% endif %}
+                {% if cita.paciente.telefono %}
+                <p class="mb-1"><strong>Teléfono:</strong> {{ cita.paciente.telefono }}</p>
+                {% endif %}
+                {% if cita.paciente.email %}
+                <p class="mb-1"><strong>Email:</strong> {{ cita.paciente.email }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Alergias -->
+        {% if cita.paciente.alergias %}
+        <div class="card mb-3 border-warning">
+            <div class="card-header bg-warning">
+                <h6 class="mb-0"><i class="bi bi-exclamation-triangle-fill"></i> ALERGIAS</h6>
+            </div>
+            <div class="card-body">
+                <p class="text-danger mb-0"><strong>{{ cita.paciente.alergias }}</strong></p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Historial de Consultas -->
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="bi bi-clock-history"></i> Historial</h6>
+            </div>
+            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                {% if consultas_previas %}
+                    {% for consulta in consultas_previas %}
+                    <div class="mb-3 pb-2 border-bottom">
+                        <small class="text-muted">{{ consulta.fecha.strftime('%d/%m/%Y') }}</small>
+                        <p class="mb-0"><strong>{{ consulta.medico.nombre_completo }}</strong></p>
+                        <small>{{ consulta.especialidad.nombre }}</small>
+                        <p class="mb-0 mt-1"><strong>Dx:</strong> {{ consulta.diagnostico[:80] }}{% if consulta.diagnostico|length > 80 %}...{% endif %}</p>
+                        <a href="{{ url_for('consultorio.ver_consulta', id=consulta.id) }}" 
+                           class="btn btn-sm btn-outline-info mt-1" target="_blank">
+                            Ver completa
+                        </a>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">Sin consultas previas</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulario de Consulta -->
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0"><i class="bi bi-clipboard-plus"></i> Nueva Consulta</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="formConsulta">
+                    <!-- Información de la Cita -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p><strong>Fecha:</strong> {{ cita.fecha.strftime('%d/%m/%Y') }}</p>
+                            <p><strong>Hora:</strong> {{ cita.hora.strftime('%H:%M') }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Especialidad:</strong> {{ cita.especialidad.nombre }}</p>
+                            <p><strong>Motivo Cita:</strong> {{ cita.motivo }}</p>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Signos Vitales -->
+                    <h5 class="mb-3"><i class="bi bi-heart-pulse"></i> Signos Vitales</h5>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="presion_arterial" class="form-label">Presión Arterial</label>
+                            <input type="text" class="form-control" id="presion_arterial" name="presion_arterial" 
+                                   placeholder="120/80">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="temperatura" class="form-label">Temperatura (°C)</label>
+                            <input type="number" step="0.1" class="form-control" id="temperatura" name="temperatura" 
+                                   placeholder="36.5">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="pulso" class="form-label">Pulso (lpm)</label>
+                            <input type="number" class="form-control" id="pulso" name="pulso" 
+                                   placeholder="70">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="peso" class="form-label">Peso (kg)</label>
+                            <input type="number" step="0.1" class="form-control" id="peso" name="peso" 
+                                   placeholder="70.5">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="altura" class="form-label">Altura (m)</label>
+                            <input type="number" step="0.01" class="form-control" id="altura" name="altura" 
+                                   placeholder="1.75">
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Motivo y Diagnóstico -->
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="motivo" class="form-label">Motivo de Consulta <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="motivo" name="motivo" rows="2" 
+                                      required>{{ cita.motivo }}</textarea>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="diagnostico" class="form-label">Diagnóstico <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="diagnostico" name="diagnostico" rows="3" 
+                                      required placeholder="Diagnóstico médico"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Recetas -->
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0"><i class="bi bi-prescription2"></i> Receta Médica</h5>
+                        <div>
+                            <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#modalReceta">
+                                <i class="bi bi-file-earmark-medical"></i> Crear Receta
+                            </button>
+                            <button type="button" id="btnPrintReceta" class="btn btn-outline-secondary" style="display:none;" title="Imprimir receta" onclick="printRecetaPreview()">
+                                <i class="bi bi-printer"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="receta-preview" class="border rounded p-3 bg-light" style="min-height: 100px; display: none;">
+                        <pre id="receta-texto" class="mb-0" style="white-space: pre-wrap;"></pre>
+                    </div>
+                    <input type="hidden" name="receta_texto" id="receta_texto_input">
+
+                    <!-- Órdenes de Estudios -->
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> Órdenes de Estudios</h5>
+                        <div>
+                            <button type="button" class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#modalOrden">
+                                <i class="bi bi-clipboard2-plus"></i> Crear Orden
+                            </button>
+                            <button type="button" id="btnPrintOrden" class="btn btn-outline-secondary" style="display:none;" title="Imprimir orden" onclick="printOrdenPreview()">
+                                <i class="bi bi-printer"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="orden-preview" class="border rounded p-3 bg-light" style="min-height: 100px; display: none;">
+                        <pre id="orden-texto" class="mb-0" style="white-space: pre-wrap;"></pre>
+                    </div>
+                    <input type="hidden" name="orden_texto" id="orden_texto_input">
+
+                    <!-- Procedimientos -->
+                    <hr>
+                    <h5 class="mb-3"><i class="bi bi-clipboard2-pulse"></i> Procedimientos Realizados</h5>
+                    {% if procedimientos_disponibles %}
+                    <div class="row mb-3">
+                        {% for proc in procedimientos_disponibles %}
+                        <div class="col-md-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="procedimientos[]" 
+                                       value="{{ proc.id }}" id="proc{{ proc.id }}">
+                                <label class="form-check-label" for="proc{{ proc.id }}">
+                                    {{ proc.nombre }}
+                                </label>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Insumos Utilizados -->
+                    <hr>
+                    <h5 class="mb-3"><i class="bi bi-box-seam"></i> Insumos Utilizados</h5>
+                    <div id="insumos-container">
+                        {% if insumos_disponibles %}
+                        <div class="row mb-2">
+                            <div class="col-md-8">
+                                <select class="form-select" name="insumo_id[]">
+                                    <option value="">Seleccionar insumo...</option>
+                                    {% for insumo in insumos_disponibles %}
+                                    <option value="{{ insumo.id }}">{{ insumo.nombre }} (Disponible: {{ insumo.cantidad_actual }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <input type="number" class="form-control" name="insumo_cantidad[]" 
+                                       placeholder="Cantidad" min="1">
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="btnAgregarInsumo">
+                        <i class="bi bi-plus-circle"></i> Agregar Insumo
+                    </button>
+
+                    <!-- Observaciones -->
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="observaciones" class="form-label">Observaciones e Indicaciones Generales</label>
+                            <textarea class="form-control" id="observaciones" name="observaciones" rows="4" 
+                                      placeholder="Indicaciones, recomendaciones, seguimiento, etc."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Botones -->
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('consultorio.mis_citas_hoy') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="bi bi-save"></i> Guardar Consulta
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Receta -->
+<div class="modal fade" id="modalReceta" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-prescription2"></i> Receta Médica</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label"><strong>Escriba la receta:</strong></label>
+                    <textarea class="form-control" id="receta-textarea" rows="15" 
+                              placeholder="Ejemplo:
+
+Rp/
+
+1. Amoxicilina 500mg
+   Tomar 1 cápsula cada 8 horas por 7 días
+   Con alimentos
+
+2. Paracetamol 500mg
+   Tomar 1 tableta cada 6 horas en caso de dolor o fiebre
+   Máximo 4 dosis al día
+
+Indicaciones generales:
+- Tomar abundante líquido
+- Reposo relativo
+- Control en 7 días"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarReceta()">
+                    <i class="bi bi-check-lg"></i> Guardar Receta
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Orden de Estudios -->
+<div class="modal fade" id="modalOrden" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-clipboard2-plus"></i> Orden de Estudios</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label"><strong>Escriba los estudios solicitados:</strong></label>
+                    <textarea class="form-control" id="orden-textarea" rows="15" 
+                              placeholder="Ejemplo:
+
+ESTUDIOS SOLICITADOS:
+
+1. Hemograma completo
+2. Glucemia en ayunas
+3. Perfil lipídico (Colesterol total, HDL, LDL, Triglicéridos)
+4. Función renal (Urea, Creatinina)
+5. Radiografía de tórax PA y lateral
+
+INDICACIONES:
+- Realizar estudios en ayunas de 8-12 horas
+- Traer resultados a consulta de control
+
+DIAGNÓSTICO PRESUNTIVO:
+Control de rutina / Evaluación metabólica"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-info" onclick="guardarOrden()">
+                    <i class="bi bi-check-lg"></i> Guardar Orden
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Guardar receta
+function guardarReceta() {
+    const texto = document.getElementById('receta-textarea').value.trim();
+    if (texto) {
+    document.getElementById('receta-texto').textContent = texto;
+        document.getElementById('receta_texto_input').value = texto;
+        // Mostrar botón imprimir para receta
+        const btn = document.getElementById('btnPrintReceta');
+        if (btn) btn.style.display = 'inline-block';
+        document.getElementById('receta-preview').style.display = 'block';
+        
+        // Cerrar modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('modalReceta'));
+        modal.hide();
+    } else {
+        alert('Por favor escriba la receta');
+    }
+}
+
+// Guardar orden
+function guardarOrden() {
+    const texto = document.getElementById('orden-textarea').value.trim();
+    if (texto) {
+    document.getElementById('orden-texto').textContent = texto;
+        document.getElementById('orden_texto_input').value = texto;
+        // Mostrar botón imprimir para orden
+        const btn = document.getElementById('btnPrintOrden');
+        if (btn) btn.style.display = 'inline-block';
+        document.getElementById('orden-preview').style.display = 'block';
+        
+        // Cerrar modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('modalOrden'));
+        modal.hide();
+    } else {
+        alert('Por favor escriba la orden de estudios');
+    }
+}
+
+// Agregar más insumos dinámicamente
+document.getElementById('btnAgregarInsumo').addEventListener('click', function() {
+    const container = document.getElementById('insumos-container');
+    const firstRow = container.querySelector('.row');
+    if (firstRow) {
+        const newRow = firstRow.cloneNode(true);
+        newRow.querySelectorAll('input, select').forEach(el => el.value = '');
+        container.appendChild(newRow);
+    }
+});
+
+// Validación del formulario
+document.getElementById('formConsulta').addEventListener('submit', function(e) {
+    const diagnostico = document.getElementById('diagnostico').value.trim();
+    if (!diagnostico) {
+        e.preventDefault();
+        alert('El diagnóstico es obligatorio');
+        document.getElementById('diagnostico').focus();
+    }
+});
+
+// Imprimir preview de receta (sin necesidad de guardar en DB)
+function printRecetaPreview() {
+    const texto = document.getElementById('receta_texto_input').value || document.getElementById('receta-textarea').value || '';
+    if (!texto.trim()) {
+        alert('No hay texto de receta para imprimir');
+        return;
+    }
+    const paciente = '{{ cita.paciente.nombre_completo }} - {{ cita.paciente.cedula }}';
+    const medico = '{{ cita.medico.nombre_completo if cita.medico else "" }}';
+    // Send the preview to server to generate a PDF and download it (no new tab)
+    const payload = { texto: texto, paciente: paciente, medico: medico, cita_id: {{ cita.id }}, motivo: {{ cita.motivo|tojson }} };
+    fetch('{{ url_for("consultorio.receta_preview_pdf") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+    }).then(function(resp){
+        if (!resp.ok) throw new Error('Error generando PDF');
+        return resp.blob();
+    }).then(function(blob){
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Receta_Preview.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 10000);
+    }).catch(function(err){
+        alert('No se pudo generar la receta: ' + err.message);
+    });
+}
+
+function printOrdenPreview() {
+    const texto = document.getElementById('orden_texto_input').value || document.getElementById('orden-textarea').value || '';
+    if (!texto.trim()) {
+        alert('No hay texto de orden para imprimir');
+        return;
+    }
+    const paciente = '{{ cita.paciente.nombre_completo }} - {{ cita.paciente.cedula }}';
+    const medico = '{{ cita.medico.nombre_completo if cita.medico else "" }}';
+    const payload = { texto: texto, paciente: paciente, medico: medico, cita_id: {{ cita.id }}, motivo: {{ cita.motivo|tojson }} };
+    fetch('{{ url_for("consultorio.orden_preview_pdf") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+    }).then(function(resp){
+        if (!resp.ok) throw new Error('Error generando PDF');
+        return resp.blob();
+    }).then(function(blob){
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Orden_Preview.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 10000);
+    }).catch(function(err){
+        alert('No se pudo generar la orden: ' + err.message);
+    });
+}
+</script>
+{% endblock %}

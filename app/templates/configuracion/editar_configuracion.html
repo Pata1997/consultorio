@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Configuración{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-pencil"></i> Editar Configuración del Consultorio</h2>
+            <a href="{{ url_for('configuracion.ver_configuracion') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+</div>
+
+<form method="POST" enctype="multipart/form-data">
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Datos Generales -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="bi bi-building"></i> Datos Generales</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="nombre" class="form-label">Nombre del Consultorio *</label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" 
+                                   value="{{ config.nombre }}" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="razon_social" class="form-label">Razón Social</label>
+                            <input type="text" class="form-control" id="razon_social" name="razon_social" 
+                                   value="{{ config.razon_social or '' }}">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="ruc" class="form-label">RUC *</label>
+                            <input type="text" class="form-control" id="ruc" name="ruc" 
+                                   value="{{ config.ruc }}" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="telefono" class="form-label">Teléfono</label>
+                            <input type="text" class="form-control" id="telefono" name="telefono" 
+                                   value="{{ config.telefono or '' }}" placeholder="0981-234567">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" 
+                                   value="{{ config.email or '' }}" placeholder="info@consultorio.com">
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="sitio_web" class="form-label">Sitio Web</label>
+                            <input type="url" class="form-control" id="sitio_web" name="sitio_web" 
+                                   value="{{ config.sitio_web or '' }}" placeholder="https://www.consultorio.com">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="direccion" class="form-label">Dirección</label>
+                        <textarea class="form-control" id="direccion" name="direccion" rows="2">{{ config.direccion or '' }}</textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="slogan" class="form-label">Slogan</label>
+                        <input type="text" class="form-control" id="slogan" name="slogan" 
+                               value="{{ config.slogan or '' }}" placeholder="Tu salud es nuestra prioridad">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="horario_atencion" class="form-label">Horario de Atención</label>
+                        <textarea class="form-control" id="horario_atencion" name="horario_atencion" rows="3">{{ config.horario_atencion or '' }}</textarea>
+                        <small class="text-muted">Ejemplo: Lunes a Viernes: 8:00 - 18:00 | Sábados: 8:00 - 12:00</small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Datos de Facturación -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="bi bi-receipt"></i> Datos de Facturación</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="punto_expedicion" class="form-label">Punto de Expedición *</label>
+                            <input type="text" class="form-control" id="punto_expedicion" name="punto_expedicion" 
+                                   value="{{ config.punto_expedicion }}" placeholder="001-001" required>
+                            <small class="text-muted">Formato: XXX-XXX</small>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="timbrado" class="form-label">Timbrado</label>
+                            <input type="text" class="form-control" id="timbrado" name="timbrado" 
+                                   value="{{ config.timbrado or '' }}" placeholder="12345678">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="fecha_inicio_timbrado" class="form-label">Fecha Inicio Timbrado</label>
+                            <input type="date" class="form-control" id="fecha_inicio_timbrado" name="fecha_inicio_timbrado" 
+                                   value="{{ config.fecha_inicio_timbrado.strftime('%Y-%m-%d') if config.fecha_inicio_timbrado else '' }}">
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="fecha_fin_timbrado" class="form-label">Fecha Fin Timbrado</label>
+                            <input type="date" class="form-control" id="fecha_fin_timbrado" name="fecha_fin_timbrado" 
+                                   value="{{ config.fecha_fin_timbrado.strftime('%Y-%m-%d') if config.fecha_fin_timbrado else '' }}">
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> 
+                        <strong>Próximo número de factura:</strong> 
+                        {{ config.punto_expedicion }}-{{ '%07d' % config.numero_factura_actual }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <!-- Logo -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="bi bi-image"></i> Logo del Consultorio</h5>
+                </div>
+                <div class="card-body">
+                    {% if config.logo_path %}
+                    <div class="text-center mb-3">
+                        <img src="{{ url_for('static', filename=config.logo_path) }}" 
+                             alt="Logo actual" 
+                             class="img-fluid" 
+                             style="max-height: 200px;">
+                        <p class="text-muted small mt-2">Logo actual</p>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="logo" class="form-label">Cambiar Logo</label>
+                        <input type="file" class="form-control" id="logo" name="logo" accept="image/*">
+                        <small class="text-muted">Formatos permitidos: PNG, JPG, JPEG, GIF</small>
+                    </div>
+                    
+                    <div class="alert alert-warning small">
+                        <i class="bi bi-exclamation-triangle"></i> 
+                        El logo aparecerá en el login y en todos los reportes PDF.
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Acciones -->
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="bi bi-save"></i> Guardar Configuración
+                </button>
+                <a href="{{ url_for('configuracion.ver_configuracion') }}" class="btn btn-secondary">
+                    <i class="bi bi-x"></i> Cancelar
+                </a>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}

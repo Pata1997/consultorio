@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Pacientes{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4><i class="bi bi-people-fill"></i> Lista de Pacientes</h4>
+                <a href="{{ url_for('agendamiento.nuevo_paciente') }}" class="btn btn-primary">
+                    <i class="bi bi-person-plus-fill"></i> Nuevo Paciente
+                </a>
+            </div>
+            <div class="card-body">
+                <!-- Búsqueda -->
+                <div class="row mb-3">
+                        <div class="col-md-6">
+                        <form method="GET" class="input-group">
+                            <input type="text" 
+                                   class="form-control" 
+                                   name="buscar" 
+                                   value="{{ busqueda }}" 
+                                   placeholder="Buscar por nombre o cédula...">
+                            <button class="btn btn-outline-secondary" type="submit">
+                                <i class="bi bi-search"></i> Buscar
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Tabla de pacientes -->
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Nombre Completo</th>
+                                <th>Cédula</th>
+                                <th>Edad</th>
+                                <th>Teléfono</th>
+                                <th>Email</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if pacientes %}
+                                {% for paciente in pacientes %}
+                                <tr>
+                                    <td>{{ paciente.nombre_completo }}</td>
+                                    <td>{{ paciente.cedula }}</td>
+                                    <td>{{ paciente.edad }} años</td>
+                                    <td>{{ paciente.telefono or '-' }}</td>
+                                    <td>{{ paciente.email or '-' }}</td>
+                                    <td>
+                                        <a href="{{ url_for('agendamiento.ver_paciente', id=paciente.id) }}" 
+                                           class="btn btn-sm btn-outline-info" 
+                                           title="Ver ficha">
+                                            <i class="bi bi-card-list"></i> Ficha
+                                        </a>
+                                        <a href="{{ url_for('agendamiento.editar_paciente', id=paciente.id) }}" 
+                                           class="btn btn-sm btn-outline-primary" 
+                                           title="Editar">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">
+                                        No se encontraron pacientes
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

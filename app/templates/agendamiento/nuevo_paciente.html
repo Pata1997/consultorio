@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Nuevo Paciente{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="bi bi-person-plus-fill"></i> Registrar Nuevo Paciente</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="nombre" class="form-label">Nombre *</label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="apellido" class="form-label">Apellido *</label>
+                            <input type="text" class="form-control" id="apellido" name="apellido" required>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="cedula" class="form-label">Número Documento *</label>
+                            <input type="text" class="form-control" id="cedula" name="cedula" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="ruc" class="form-label">RUC</label>
+                            <input type="text" class="form-control" id="ruc" name="ruc">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="fecha_nacimiento" class="form-label">Fecha de Nacimiento *</label>
+                            <input type="date" class="form-control" id="fecha_nacimiento" name="fecha_nacimiento" required>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="sexo" class="form-label">Sexo *</label>
+                            <select class="form-select" id="sexo" name="sexo" required>
+                                <option value="">Seleccionar...</option>
+                                <option value="M">Masculino</option>
+                                <option value="F">Femenino</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="tipo_sangre" class="form-label">Tipo de Sangre</label>
+                            <select class="form-select" id="tipo_sangre" name="tipo_sangre">
+                                <option value="">Seleccionar...</option>
+                                <option value="A+">A+</option>
+                                <option value="A-">A-</option>
+                                <option value="B+">B+</option>
+                                <option value="B-">B-</option>
+                                <option value="AB+">AB+</option>
+                                <option value="AB-">AB-</option>
+                                <option value="O+">O+</option>
+                                <option value="O-">O-</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mt-3">
+                        <div class="col-md-8 mb-3">
+                            <label for="razon_social" class="form-label">Razón Social</label>
+                            <input type="text" class="form-control" id="razon_social" name="razon_social">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="ciudad" class="form-label">Ciudad</label>
+                            <input type="text" class="form-control" id="ciudad" name="ciudad">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="telefono" class="form-label">Teléfono *</label>
+                            <input type="tel" class="form-control" id="telefono" name="telefono" 
+                                   placeholder="Ej: 0981-123456" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="direccion" class="form-label">Dirección</label>
+                        <textarea class="form-control" id="direccion" name="direccion" rows="2"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="alergias" class="form-label">Alergias</label>
+                        <textarea class="form-control" id="alergias" name="alergias" rows="2" 
+                                  placeholder="Especificar alergias conocidas..."></textarea>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" class="btn btn-secondary" onclick="window.close()">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Guardar Paciente
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+// Enviar mensaje al padre cuando se guarda el paciente
+document.querySelector('form').addEventListener('submit', function(e) {
+    if (window.opener) {
+        // Informar a la ventana padre que se registró un nuevo paciente
+        setTimeout(() => {
+            if (window.opener && !window.opener.closed) {
+                window.opener.postMessage({type: 'pacienteRegistrado'}, '*');
+            }
+        }, 500);
+    }
+});
+</script>
+{% endblock %}
+{% endblock %}

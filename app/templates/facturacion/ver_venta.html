@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Factura #{{ venta.numero_factura }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2><i class="fas fa-file-invoice"></i> Factura #{{ venta.numero_factura }}</h2>
+                <div>
+                    <button onclick="window.print()" class="btn btn-primary">
+                        <i class="fas fa-print"></i> Imprimir
+                    </button>
+                    <a href="{{ url_for('facturacion.nueva_venta') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Volver
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Factura Imprimible -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card factura-container" id="factura">
+                <div class="card-body p-4">
+                    <!-- Encabezado -->
+                    <div class="row border-bottom pb-3 mb-4">
+                        <div class="col-8">
+                            <h3 class="text-primary mb-1">CONSULTORIO MÉDICO</h3>
+                            <p class="mb-1"><strong>Dirección:</strong> [Dirección del consultorio]</p>
+                            <p class="mb-1"><strong>Teléfono:</strong> [Teléfono]</p>
+                            <p class="mb-0"><strong>RUC:</strong> [RUC del consultorio]</p>
+                        </div>
+                        <div class="col-4 text-end">
+                            <div class="border border-dark p-2">
+                                <h4 class="mb-0">FACTURA</h4>
+                                <p class="mb-1"><strong>{{ venta.numero_factura }}</strong></p>
+                                {% if venta.timbrado %}
+                                <p class="mb-0"><small>Timbrado: {{ venta.timbrado }}</small></p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Datos del Cliente -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="text-muted mb-3">DATOS DEL CLIENTE</h5>
+                            <div class="row">
+                                <div class="col-6">
+                                    <p class="mb-1"><strong>Fecha:</strong> {{ venta.fecha.strftime('%d/%m/%Y %H:%M') }}</p>
+                                    <p class="mb-1"><strong>Nombre:</strong> {{ venta.nombre_factura }}</p>
+                                </div>
+                                <div class="col-6">
+                                    {% if venta.ruc_factura %}
+                                    <p class="mb-1"><strong>RUC:</strong> {{ venta.ruc_factura }}</p>
+                                    {% else %}
+                                    <p class="mb-1"><strong>CI:</strong> {{ venta.paciente.cedula }}</p>
+                                    {% endif %}
+                                    <p class="mb-1"><strong>Dirección:</strong> {{ venta.direccion_factura or venta.paciente.direccion or 'N/A' }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Detalle de Items -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <table class="table table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th width="50">Cant.</th>
+                                        <th>Descripción</th>
+                                        <th class="text-end" width="150">Precio Unit.</th>
+                                        <th class="text-end" width="150">Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for detalle in venta.detalles %}
+                                    <tr>
+                                        <td class="text-center">{{ detalle.cantidad }}</td>
+                                        <td>
+                                            <strong>{{ detalle.concepto }}</strong>
+                                            {% if detalle.descripcion %}
+                                            <br><small class="text-muted">{{ detalle.descripcion }}</small>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-end">{{ detalle.precio_unitario|format_currency }} Gs.</td>
+                                        <td class="text-end">{{ detalle.subtotal|format_currency }} Gs.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Totales -->
+                    <div class="row">
+                        <div class="col-8">
+                            {% if venta.observaciones %}
+                            <div class="alert alert-light">
+                                <strong>Observaciones:</strong><br>
+                                {{ venta.observaciones }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-4">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td><strong>Subtotal:</strong></td>
+                                    <td class="text-end">{{ venta.subtotal|format_currency }} Gs.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>IVA 10%:</strong></td>
+                                    <td class="text-end">{{ venta.iva|format_currency }} Gs.</td>
+                                </tr>
+                                <tr class="table-primary">
+                                    <td><h5 class="mb-0"><strong>TOTAL:</strong></h5></td>
+                                    <td class="text-end"><h5 class="mb-0"><strong>{{ venta.total|format_currency }} Gs.</strong></h5></td>
+                                </tr>
+                            </table>
+
+                            <!-- Formas de Pago -->
+                            {% if venta.pagos %}
+                            <div class="border-top pt-2 mt-2">
+                                <p class="mb-1"><strong>Forma de Pago:</strong></p>
+                                {% for pago in venta.pagos %}
+                                <p class="mb-1">
+                                    <small>
+                                        {{ pago.forma_pago.nombre.replace('_', ' ').title() }}: 
+                                        {{ pago.monto|format_currency }} Gs.
+                                        {% if pago.referencia %}
+                                        <br>Ref: {{ pago.referencia }}
+                                        {% endif %}
+                                    </small>
+                                </p>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="row border-top pt-3 mt-4">
+                        <div class="col-6">
+                            <p class="mb-0"><small><strong>Cajero:</strong> {{ venta.usuario_registro.nombre_completo }}</small></p>
+                        </div>
+                        <div class="col-6 text-end">
+                            <p class="mb-0"><small>Estado: 
+                                <span class="badge {% if venta.estado == 'pagada' %}bg-success{% elif venta.estado == 'pendiente' %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ venta.estado.upper() }}
+                                </span>
+                            </small></p>
+                        </div>
+                    </div>
+
+                    <!-- Información legal -->
+                    <div class="row mt-4 text-center">
+                        <div class="col-12">
+                            <hr>
+                            <small class="text-muted">
+                                Original: Blanco - Cliente | Duplicado: Amarillo - Archivo<br>
+                                Resolución General No. XX/20XX - Fecha: DD/MM/AAAA
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botones de Acción (solo en pantalla) -->
+    <div class="row mt-3 no-print">
+        <div class="col-12 text-center">
+            <a href="{{ url_for('facturacion.nueva_venta') }}" class="btn btn-success btn-lg">
+                <i class="fas fa-plus-circle"></i> Nueva Factura
+            </a>
+            <a href="{{ url_for('facturacion.listar_ventas') }}" class="btn btn-primary btn-lg">
+                <i class="fas fa-list"></i> Ver Todas las Facturas
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        
+        .factura-container {
+            box-shadow: none !important;
+            border: none !important;
+        }
+        
+        body {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+    }
+    
+    @media screen {
+        .factura-container {
+            max-width: 900px;
+            margin: 0 auto;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+    }
+</style>
+{% endblock %}

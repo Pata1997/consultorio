@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+
+{% block title %}Gestionar Precios de Procedimientos{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>Precios existentes</h5>
+                <form class="d-flex" method="get" action="{{ url_for('consultorio.gestionar_precios') }}">
+                    <input type="search" name="q" value="{{ request.args.get('q','') }}" class="form-control form-control-sm me-2" placeholder="Buscar por procedimiento, médico o especialidad">
+                    <button class="btn btn-sm btn-outline-secondary">Buscar</button>
+                </form>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Procedimiento</th>
+                                <th>Médico</th>
+                                <th>Especialidad</th>
+                                <th>Precio</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in precios %}
+                            <tr>
+                                <td>{{ p.id }}</td>
+                                <td>{{ p.procedimiento_rel.nombre if p.procedimiento_rel else p.procedimiento_id }}</td>
+                                <td>
+                                    {% if p.medico %}
+                                        {{ p.medico.nombre }} {{ p.medico.apellido }}
+                                    {% elif p.medico_id %}
+                                        ID: {{ p.medico_id }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if p.especialidad %}
+                                        {{ p.especialidad.nombre }}
+                                    {% elif p.especialidad_id %}
+                                        ID: {{ p.especialidad_id }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>{{ p.precio|format_currency }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary btn-editar-precio" 
+                                        data-id="{{ p.id }}" 
+                                        data-procedimiento-id="{{ p.procedimiento_id }}" 
+                                        data-medico-id="{{ p.medico_id or '' }}" 
+                                        data-especialidad-id="{{ p.especialidad_id or '' }}" 
+                                        data-precio="{{ p.precio|format_currency }}"
+                                    >Editar</button>
+                                    <form method="post" action="{{ url_for('consultorio.eliminar_precio', id=p.id) }}" style="display:inline" onsubmit="return confirm('Eliminar precio?');">
+                                        <button class="btn btn-sm btn-outline-danger">Eliminar</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">No hay precios configurados</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><h5>Agregar/Actualizar Precio</h5></div>
+            <div class="card-body">
+                <form method="post" id="precio_form">
+                    <input type="hidden" name="precio_id" id="precio_id" value="">
+                    <div class="mb-2">
+                        <label class="form-label">Especialidad</label>
+                        <select id="especialidad_select" name="especialidad_id" class="form-select">
+                            <option value="">-- Ninguna --</option>
+                            {% for e in especialidades %}
+                            <option value="{{ e.id }}">{{ e.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Médico</label>
+                        <select id="medico_select" name="medico_id" class="form-select" disabled>
+                            <option value="">-- Ninguno --</option>
+                            {# inicialmente vacío; se rellenará según la especialidad seleccionada #}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Procedimiento</label>
+                        <select id="procedimiento_select" name="procedimiento_id" class="form-select" required>
+                            <option value="">-- Seleccione --</option>
+                            {% for proc in procedimientos %}
+                            <option value="{{ proc.id }}">{{ proc.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Precio</label>
+                        <input type="text" name="precio" class="form-control currency-input" required placeholder="e.g. 12000">
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary" id="form_submit_btn">Guardar</button>
+                        <button type="button" class="btn btn-outline-secondary" id="form_cancel_btn" style="display:none">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+// JS mínimo para cargar médicos por especialidad y procedimientos por médico
+document.addEventListener('DOMContentLoaded', function(){
+    const especialidadSelect = document.getElementById('especialidad_select');
+    const medicoSelect = document.getElementById('medico_select');
+    const procedimientoSelect = document.getElementById('procedimiento_select');
+
+    function clearSelect(sel, placeholderText){
+        sel.innerHTML = '';
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = placeholderText || '-- --';
+        sel.appendChild(opt);
+    }
+
+    especialidadSelect.addEventListener('change', function(){
+        const espId = this.value;
+        clearSelect(medicoSelect, '-- Ninguno --');
+        // deshabilitar mientras carga
+        medicoSelect.disabled = true;
+        // limpiar procedimientos para forzar nueva selección del médico
+        clearSelect(procedimientoSelect, '-- Seleccione --');
+
+        if(!espId){
+            // si se deseleccionó, permitir seleccionar médico manualmente desde la lista original
+            medicoSelect.disabled = true;
+            return;
+        }
+
+        fetch(`${window.location.origin}/consultorio/api/especialidad/${espId}/medicos`)
+                .then(r => {
+                    if(!r.ok) return r.text().then(t => { throw new Error(`HTTP ${r.status}: ${t || r.statusText}`); });
+                    return r.json();
+                })
+            .then(data => {
+                if(!Array.isArray(data)) return;
+                // agregar opción vacía
+                clearSelect(medicoSelect, '-- Ninguno --');
+                data.forEach(m => {
+                    const o = document.createElement('option');
+                    o.value = m.id;
+                    o.textContent = m.nombre;
+                    medicoSelect.appendChild(o);
+                });
+                medicoSelect.disabled = false;
+            })
+            .catch(err => {
+                console.error('Error cargando médicos:', err);
+                medicoSelect.disabled = true;
+            });
+    });
+
+    medicoSelect.addEventListener('change', function(){
+        const medId = this.value;
+        clearSelect(procedimientoSelect, '-- Seleccione --');
+
+        if(!medId){
+            // dejar los procedimientos globales si no hay médico seleccionado
+            return;
+        }
+
+        fetch(`${window.location.origin}/consultorio/api/medico/${medId}/procedimientos`)
+            .then(r => {
+                if(!r.ok) return r.text().then(t => { throw new Error(`HTTP ${r.status}: ${t || r.statusText}`); });
+                return r.json();
+            })
+            .then(data => {
+                if(!Array.isArray(data)) return;
+                clearSelect(procedimientoSelect, '-- Seleccione --');
+                data.forEach(p => {
+                    const o = document.createElement('option');
+                    o.value = p.id;
+                    o.textContent = p.nombre;
+                    procedimientoSelect.appendChild(o);
+                });
+            })
+            .catch(err => {
+                console.error('Error cargando procedimientos:', err);
+            });
+    });
+
+    // Edición: abrir modal con datos precargados
+    document.querySelectorAll('.btn-editar-precio').forEach(btn => {
+        btn.addEventListener('click', function(){
+            const id = this.dataset.id;
+            const procedimientoId = this.dataset.procedimientoId;
+            const medicoId = this.dataset.medicoId || '';
+            const especialidadId = this.dataset.especialidadId || '';
+            const precio = this.dataset.precio || '';
+
+            // Rellenar modal fields
+            const modal = document.getElementById('editPrecioModal');
+            modal.querySelector('#modal_precio_id').value = id;
+            modal.querySelector('#modal_procedimiento_select').value = procedimientoId;
+            modal.querySelector('#modal_precio_input').value = precio;
+
+            // Especialidad y medico
+            modal.querySelector('#modal_especialidad_select').value = especialidadId;
+            // trigger change to populate medicos if needed
+            const ev = new Event('change');
+            modal.querySelector('#modal_especialidad_select').dispatchEvent(ev);
+
+            // wait a bit for medicos to load then set medico
+            setTimeout(()=>{
+                if(medicoId){
+                    modal.querySelector('#modal_medico_select').value = medicoId;
+                }
+            }, 300);
+
+            // show bootstrap modal
+            try{
+                const bsModal = new bootstrap.Modal(modal);
+                bsModal.show();
+            }catch(e){
+                // fallback: make it visible
+                modal.style.display = 'block';
+            }
+        });
+    });
+
+    // Cancelar edición
+    document.getElementById('form_cancel_btn').addEventListener('click', function(){
+        document.getElementById('precio_id').value = '';
+        procedimientoSelect.value = '';
+        especialidadSelect.value = '';
+        medicoSelect.innerHTML = '<option value="">-- Ninguno --</option>';
+        medicoSelect.disabled = true;
+        document.querySelector('input[name="precio"]').value = '';
+        document.getElementById('form_submit_btn').textContent = 'Guardar';
+        this.style.display = 'none';
+    });
+});
+</script>
+<!-- Modal para editar precio -->
+<div class="modal fade" id="editPrecioModal" tabindex="-1" aria-labelledby="editPrecioModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editPrecioModalLabel">Editar Precio</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" id="modal_precio_form">
+                    <input type="hidden" name="precio_id" id="modal_precio_id" value="">
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <label class="form-label">Especialidad</label>
+                            <select id="modal_especialidad_select" name="especialidad_id" class="form-select">
+                                <option value="">-- Ninguna --</option>
+                                {% for e in especialidades %}
+                                <option value="{{ e.id }}">{{ e.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <label class="form-label">Médico</label>
+                            <select id="modal_medico_select" name="medico_id" class="form-select">
+                                <option value="">-- Ninguno --</option>
+                            </select>
+                        </div>
+                        <div class="col-md-12 mb-2">
+                            <label class="form-label">Procedimiento</label>
+                            <select id="modal_procedimiento_select" name="procedimiento_id" class="form-select" required>
+                                <option value="">-- Seleccione --</option>
+                                {% for proc in procedimientos %}
+                                <option value="{{ proc.id }}">{{ proc.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                            <div class="col-md-6 mb-2">
+                            <label class="form-label">Precio</label>
+                            <input id="modal_precio_input" type="text" name="precio" class="form-control currency-input" required placeholder="e.g. 12000">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" id="modal_save_btn">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Modal: acciones para cargar médicos por especialidad dentro del modal
+document.addEventListener('DOMContentLoaded', function(){
+        const modal = document.getElementById('editPrecioModal');
+        if(!modal) return;
+        const espSelect = modal.querySelector('#modal_especialidad_select');
+        const medSelect = modal.querySelector('#modal_medico_select');
+        const procSelect = modal.querySelector('#modal_procedimiento_select');
+        const saveBtn = modal.querySelector('#modal_save_btn');
+
+        function clearSelect(sel, placeholder){ sel.innerHTML=''; const o=document.createElement('option'); o.value=''; o.textContent=placeholder; sel.appendChild(o);}    
+
+        espSelect.addEventListener('change', function(){
+                const id = this.value;
+                clearSelect(medSelect,'-- Ninguno --');
+                if(!id) return;
+                fetch(`${window.location.origin}/consultorio/api/especialidad/${id}/medicos`)
+                        .then(r => { if(!r.ok) return r.text().then(t=>{throw new Error(`HTTP ${r.status}: ${t||r.statusText}`)}); return r.json(); })
+                        .then(data => { if(!Array.isArray(data)) return; data.forEach(m=>{ const o=document.createElement('option'); o.value=m.id; o.textContent=m.nombre; medSelect.appendChild(o); }); })
+                        .catch(err=>{ console.error('Error modal cargando medicos',err); });
+        });
+
+        // Guardar: submit del formulario modal hacia la misma ruta de gestión
+        saveBtn.addEventListener('click', function(){
+                // Enviar el form mediante submit normal para reutilizar la lógica del servidor
+                const form = modal.querySelector('#modal_precio_form');
+                // Copiar datos al formulario principal (opcional) o crear un form dinámico POST
+                // Simpler: submit via fetch to the same endpoint
+                const fd = new FormData(form);
+                fetch(window.location.pathname, { method: 'POST', body: fd })
+                        .then(r=>{ if(r.redirected){ window.location = r.url; return; } return r.text(); })
+                        .then(t=>{ try{ const bs = bootstrap.Modal.getInstance(modal); bs.hide(); }catch(e){} })
+                        .catch(err=>{ console.error('Error guardando precio',err); alert('Error al guardar el precio'); });
+        });
+});
+</script>
+{% endblock %}

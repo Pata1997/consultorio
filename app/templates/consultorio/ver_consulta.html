@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Consulta {{ consulta.id }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-3">
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-person-circle"></i> Paciente</h5>
+            </div>
+            <div class="card-body">
+                <h6><strong>{{ consulta.paciente.nombre_completo }}</strong></h6>
+                <hr>
+                <p class="mb-1"><strong>Cédula:</strong> {{ consulta.paciente.cedula }}</p>
+                <p class="mb-1"><strong>Edad:</strong> {{ consulta.paciente.edad }} años</p>
+                <p class="mb-1"><strong>Sexo:</strong> {{ consulta.paciente.sexo }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0"><i class="bi bi-clipboard-check"></i> Consulta #{{ consulta.id }}</h4>
+            </div>
+            <div class="card-body">
+                <p><strong>Fecha:</strong> {{ consulta.fecha.strftime('%d/%m/%Y %H:%M') }}</p>
+                <p><strong>Médico:</strong> {{ consulta.medico.nombre_completo if consulta.medico else '' }}</p>
+                <hr>
+                <h5>Diagnóstico</h5>
+                <p>{{ consulta.diagnostico }}</p>
+                <h5>Observaciones</h5>
+                <p>{{ consulta.observaciones or 'Sin observaciones' }}</p>
+
+                <hr>
+
+                {% if consulta.recetas %}
+                <h5 class="d-flex justify-content-between align-items-center">Recetas
+                    <small>
+                                <a class="btn btn-sm btn-outline-primary download-pdf"
+                                    href="{{ url_for('consultorio.receta_pdf', consulta_id=consulta.id, receta_id=consulta.recetas[-1].id) }}"
+                                    data-filename="Receta_{{ consulta.id }}.pdf">
+                            <i class="bi bi-printer"></i> Imprimir última receta
+                        </a>
+                    </small>
+                </h5>
+                <div class="border rounded p-3 mb-3 bg-light">
+                    <pre style="white-space: pre-wrap;">{{ consulta.recetas[-1].indicaciones }}</pre>
+                </div>
+                {% else %}
+                <p class="text-muted">No hay receta registrada.</p>
+                {% endif %}
+
+                {% if consulta.ordenes_estudio %}
+                <h5 class="d-flex justify-content-between align-items-center">Órdenes de Estudios
+                    <small>
+                                <a class="btn btn-sm btn-outline-primary download-pdf"
+                                    href="{{ url_for('consultorio.orden_pdf', consulta_id=consulta.id, orden_id=consulta.ordenes_estudio[-1].id) }}"
+                                    data-filename="Orden_{{ consulta.id }}.pdf">
+                            <i class="bi bi-printer"></i> Imprimir última orden
+                        </a>
+                    </small>
+                </h5>
+                <div class="border rounded p-3 mb-3 bg-light">
+                    <pre style="white-space: pre-wrap;">{{ consulta.ordenes_estudio[-1].descripcion }}</pre>
+                </div>
+                {% else %}
+                <p class="text-muted">No hay órdenes de estudio registradas.</p>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function downloadBlobResponse(response, filename) {
+    return response.blob().then(function(blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'document.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 10000);
+    });
+}
+
+function downloadPdf(url, suggestedName) {
+    fetch(url, {credentials: 'same-origin'}).then(function(resp){
+        if (!resp.ok) throw new Error('Error descargando el PDF');
+        return downloadBlobResponse(resp, suggestedName);
+    }).catch(function(err){
+        alert('No se pudo descargar el PDF: ' + err.message);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+    document.querySelectorAll('.download-pdf').forEach(function(el){
+        el.addEventListener('click', function(e){
+            e.preventDefault();
+            const fname = el.getAttribute('data-filename') || 'document.pdf';
+            downloadPdf(el.href, fname);
+        });
+    });
+});
+</script>
+{% endblock %}
+

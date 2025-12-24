@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Mis Consultas{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="bi bi-clipboard-pulse"></i> Mis Consultas</h2>
+                <p class="text-muted">Historial completo de consultas realizadas</p>
+            </div>
+            <a href="{{ url_for('main.index') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Volver al Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Total: {{ consultas.total }} consultas</h5>
+            </div>
+            <div class="card-body">
+                {% if consultas.items %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Paciente</th>
+                                <th>Especialidad</th>
+                                <th>Motivo</th>
+                                <th>Diagnóstico</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for consulta in consultas.items %}
+                            <tr>
+                                <td>
+                                    <strong>{{ consulta.fecha.strftime('%d/%m/%Y') }}</strong>
+                                    <br>
+                                    <small class="text-muted">{{ consulta.fecha.strftime('%H:%M') }}</small>
+                                </td>
+                                <td>
+                                    <strong>{{ consulta.paciente.nombre_completo }}</strong>
+                                    <br>
+                                    <small class="text-muted">CI: {{ consulta.paciente.cedula }}</small>
+                                </td>
+                                <td>{{ consulta.especialidad.nombre }}</td>
+                                <td>{{ consulta.motivo[:50] }}{% if consulta.motivo|length > 50 %}...{% endif %}</td>
+                                <td>{{ consulta.diagnostico[:50] }}{% if consulta.diagnostico|length > 50 %}...{% endif %}</td>
+                                <td>
+                                    <a href="{{ url_for('consultorio.ver_consulta', id=consulta.id) }}" 
+                                       class="btn btn-sm btn-info">
+                                        <i class="bi bi-eye"></i> Ver
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Paginación -->
+                {% if consultas.pages > 1 %}
+                <nav aria-label="Navegación de consultas">
+                    <ul class="pagination justify-content-center mt-4">
+                        <li class="page-item {% if not consultas.has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="{% if consultas.has_prev %}{{ url_for('consultorio.mis_consultas', page=consultas.prev_num) }}{% else %}#{% endif %}">
+                                Anterior
+                            </a>
+                        </li>
+                        
+                        {% for page_num in consultas.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                            {% if page_num %}
+                                <li class="page-item {% if page_num == consultas.page %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('consultorio.mis_consultas', page=page_num) }}">
+                                        {{ page_num }}
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <a class="page-link" href="#">...</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        <li class="page-item {% if not consultas.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="{% if consultas.has_next %}{{ url_for('consultorio.mis_consultas', page=consultas.next_num) }}{% else %}#{% endif %}">
+                                Siguiente
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+                {% endif %}
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-clipboard-x" style="font-size: 4rem; color: #ccc;"></i>
+                    <p class="text-muted mt-3">No has realizado consultas aún</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

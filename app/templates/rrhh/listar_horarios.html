@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Horarios de Atención{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4><i class="bi bi-calendar-week"></i> Horarios de Atención</h4>
+            </div>
+            <div class="card-body">
+                <!-- Selector de médico -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label for="medico_select" class="form-label">Seleccionar Médico:</label>
+                        <select class="form-select" id="medico_select" onchange="window.location.href='{{ url_for('rrhh.listar_horarios') }}?medico_id='+this.value">
+                            <option value="">-- Seleccione un médico --</option>
+                            {% for m in medicos %}
+                            <option value="{{ m.id }}" {% if medico and medico.id == m.id %}selected{% endif %}>
+                                Dr./Dra. {{ m.nombre }} {{ m.apellido }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% if medico %}
+                    <div class="col-md-6 d-flex align-items-end">
+                        <a href="{{ url_for('rrhh.crear_horario', medico_id=medico.id) }}" class="btn btn-primary">
+                            <i class="bi bi-plus-circle"></i> Agregar Horario
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if medico %}
+                <div class="alert alert-info">
+                    <strong>Médico:</strong> Dr./Dra. {{ medico.nombre }} {{ medico.apellido }}
+                    {% if medico.especialidades %}
+                    <br><strong>Especialidades:</strong> 
+                    {% for me in medico.especialidades %}
+                        {% set esp = me.especialidad %}
+                        {{ esp.nombre }}{% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                    {% endif %}
+                </div>
+
+                {% if horarios %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Día de la Semana</th>
+                                <th>Hora Inicio</th>
+                                <th>Hora Fin</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] %}
+                            {% for horario in horarios %}
+                            <tr>
+                                <td><strong>{{ dias[horario.dia_semana] }}</strong></td>
+                                <td>{{ horario.hora_inicio.strftime('%H:%M') }}</td>
+                                <td>{{ horario.hora_fin.strftime('%H:%M') }}</td>
+                                <td>
+                                    {% if horario.activo %}
+                                    <span class="badge bg-success">Activo</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Inactivo</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('rrhh.editar_horario', id=horario.id) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil"></i> Editar
+                                    </a>
+                                    <form method="POST" action="{{ url_for('rrhh.eliminar_horario', id=horario.id) }}" 
+                                          style="display: inline;"
+                                          onsubmit="event.preventDefault(); confirmar('Eliminar Horario', '¿Está seguro de eliminar este horario?', () => { this.submit(); });">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-trash"></i> Eliminar
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> No hay horarios configurados para este médico.
+                    <a href="{{ url_for('rrhh.crear_horario', medico_id=medico.id) }}" class="alert-link">Agregar horario</a>
+                </div>
+                {% endif %}
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Seleccione un médico para ver y gestionar sus horarios de atención.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Médico{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-person-badge"></i> Dashboard Médico</h2>
+        <p class="text-muted">Bienvenido, Dr./Dra. {{ current_user.medico.nombre }} {{ current_user.medico.apellido }}</p>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <!-- Estadísticas del día (3 tarjetas tras eliminar Pendientes Hoy) -->
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-uppercase">Confirmadas Hoy</h6>
+                        <h2>{{ citas_confirmadas }}</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-check-circle" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-uppercase">Atendidos Hoy</h6>
+                        <h2>{{ pacientes_atendidos }}</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-clipboard-check" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-uppercase">Total Consultas</h6>
+                        <h2>{{ consultas_completadas }}</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-clipboard-pulse" style="font-size: 3rem; opacity: 0.5;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Próxima Cita eliminada para rol médico -->
+
+<!-- Citas de Hoy -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-calendar3"></i> Mis Citas de Hoy</h5>
+                <a href="{{ url_for('consultorio.mis_citas_hoy') }}" class="btn btn-sm btn-primary">
+                    Ver Todas
+                </a>
+            </div>
+            <div class="card-body">
+                {% if citas_hoy %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Paciente</th>
+                                <th>Motivo</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cita in citas_hoy %}
+                            <tr>
+                                <td><strong>{{ cita.hora.strftime('%H:%M') }}</strong></td>
+                                <td>
+                                    {{ cita.paciente.nombre_completo }}
+                                    <br><small class="text-muted">CI: {{ cita.paciente.cedula }}</small>
+                                </td>
+                                <td>{{ cita.motivo[:30] }}{% if cita.motivo|length > 30 %}...{% endif %}</td>
+                                <td>
+                                    {% if cita.estado == 'pendiente' %}
+                                    <span class="badge bg-warning">Pendiente</span>
+                                    {% elif cita.estado == 'confirmada' %}
+                                    <span class="badge bg-success">Confirmada</span>
+                                    {% elif cita.estado == 'atendida' %}
+                                    <span class="badge bg-info">Atendida</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if cita.estado == 'confirmada' %}
+                                    <a href="{{ url_for('consultorio.nueva_consulta', cita_id=cita.id) }}" 
+                                       class="btn btn-sm btn-success">
+                                        <i class="bi bi-clipboard-plus"></i> Atender
+                                    </a>
+                                    {% elif cita.estado == 'atendida' and cita.consulta %}
+                                    <a href="{{ url_for('consultorio.ver_consulta', id=cita.consulta.id) }}" 
+                                       class="btn btn-sm btn-info">
+                                        <i class="bi bi-eye"></i> Ver Consulta
+                                    </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">No tienes citas programadas para hoy</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Accesos Rápidos eliminados para rol médico -->
+{% endblock %}

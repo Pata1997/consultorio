@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Crear Horario{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="bi bi-calendar-plus"></i> Crear Horario de Atención</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <strong>Médico:</strong> Dr./Dra. {{ medico.nombre }} {{ medico.apellido }}
+                </div>
+
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="dia_semana" class="form-label">Día de la Semana *</label>
+                        <select class="form-select" id="dia_semana" name="dia_semana" required>
+                            <option value="">Seleccionar...</option>
+                            {% for dia in dias_semana %}
+                            <option value="{{ dia.valor }}">{{ dia.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="hora_inicio" class="form-label">Hora Inicio *</label>
+                            <input type="time" class="form-control" id="hora_inicio" name="hora_inicio" required>
+                            <small class="text-muted">Ejemplo: 08:00</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="hora_fin" class="form-label">Hora Fin *</label>
+                            <input type="time" class="form-control" id="hora_fin" name="hora_fin" required>
+                            <small class="text-muted">Ejemplo: 12:00</small>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <small>
+                            <i class="bi bi-info-circle"></i> 
+                            Los horarios se dividen automáticamente en slots de 30 minutos para las citas.
+                        </small>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('rrhh.listar_horarios', medico_id=medico.id) }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Guardar Horario
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

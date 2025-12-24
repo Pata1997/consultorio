@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Cita{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="bi bi-calendar-event"></i> Editar Cita</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Paciente</label>
+                            <input type="text" class="form-control" value="{{ cita.paciente.nombre_completo }}" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Médico</label>
+                            <input type="text" class="form-control" value="Dr./Dra. {{ cita.medico.nombre }} {{ cita.medico.apellido }}" readonly>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Especialidad</label>
+                            <input type="text" class="form-control" value="{{ cita.especialidad.nombre }}" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Estado</label>
+                            <input type="text" class="form-control" value="{{ cita.estado|title }}" readonly>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="fecha" class="form-label">Fecha <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="fecha" name="fecha" 
+                                   value="{{ cita.fecha.isoformat() }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="hora" class="form-label">Hora <span class="text-danger">*</span></label>
+                            <input type="time" class="form-control" id="hora" name="hora" 
+                                   value="{{ cita.hora.strftime('%H:%M') }}" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="motivo" class="form-label">Motivo de Consulta</label>
+                        <textarea class="form-control" id="motivo" name="motivo" rows="3">{{ cita.motivo }}</textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('agendamiento.listar_citas') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Guardar Cambios
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

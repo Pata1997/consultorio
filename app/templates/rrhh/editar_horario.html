@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Horario{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="bi bi-calendar-event"></i> Editar Horario de Atención</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <strong>Médico:</strong> Dr./Dra. {{ horario.medico.nombre }} {{ horario.medico.apellido }}<br>
+                    <strong>Día:</strong> <span class="text-capitalize">{{ horario.dia_semana }}</span>
+                </div>
+
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="hora_inicio" class="form-label">Hora Inicio *</label>
+                            <input type="time" class="form-control" id="hora_inicio" name="hora_inicio" 
+                                   value="{{ horario.hora_inicio.strftime('%H:%M') }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="hora_fin" class="form-label">Hora Fin *</label>
+                            <input type="time" class="form-control" id="hora_fin" name="hora_fin" 
+                                   value="{{ horario.hora_fin.strftime('%H:%M') }}" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="activo" class="form-label">Estado</label>
+                        <select class="form-select" id="activo" name="activo">
+                            <option value="true" {% if horario.activo %}selected{% endif %}>Activo</option>
+                            <option value="false" {% if not horario.activo %}selected{% endif %}>Inactivo</option>
+                        </select>
+                        <small class="text-muted">Los horarios inactivos no aparecen en el calendario de citas</small>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('rrhh.listar_horarios', medico_id=horario.medico_id) }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Guardar Cambios
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
