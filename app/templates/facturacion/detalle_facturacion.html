@@ -171,7 +171,6 @@
                                         <tr>
                                             <th>Forma</th>
                                             <th class="text-end" width="150">Monto (Gs.)</th>
-                                            <th class="text-center" width="120">Referencia</th>
                                             <th class="text-center" width="80">Acciones</th>
                                         </tr>
                                     </thead>
@@ -202,10 +201,20 @@
                             </div>
                         </div>
 
-                        <!-- Observaciones -->
+                                        <!-- Nota sobre vuelto / efectivo insuficiente -->
+                                        <div id="vuelto_note_container" style="display:none;" class="mt-2">
+                                            <p id="vuelto_note" class="small text-warning mb-0"></p>
+                                        </div>
+
+                        <!-- Resumen de cobro: TOTAL y Restante -->
                         <div class="mb-3">
-                            <label class="form-label">Observaciones</label>
-                            <textarea class="form-control" name="observaciones" rows="2"></textarea>
+                            <label class="form-label"><strong>TOTAL:</strong></label>
+                            <div class="h4">{{ total|format_currency }} Gs.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Restante por cobrar:</strong></label>
+                            <div class="h5 text-danger" id="restanteCobrar">{{ total|format_currency }} Gs.</div>
                         </div>
 
                         <!-- Botones -->
@@ -243,11 +252,8 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Monto (Gs.)</label>
-                    <input type="text" class="form-control currency-input" id="input_monto" value="0">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Referencia (opcional)</label>
-                    <input type="text" class="form-control" id="input_referencia" placeholder="Nro. autorización / referencia">
+                    <!-- Usamos un manejador específico para este input para evitar interferencias con el formateador global -->
+                    <input type="text" class="form-control" id="input_monto" value="">
                 </div>
             </div>
             <div class="modal-footer">
@@ -290,6 +296,19 @@
     </div>
 </div>
 
+<!-- Modal final que muestra el vuelto -->
+<div class="modal fade" id="modalVuelto" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <h5 class="mb-2">Vuelto</h5>
+                <p id="modalVueltoText" class="h4 mb-0">0 Gs.</p>
+                <small class="text-muted">Presione cualquier tecla para continuar</small>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     const totalFactura = parseFloat('{{ total }}');
 
@@ -299,23 +318,77 @@
     function abrirModalPago() {
         // reset modal inputs
         document.getElementById('input_monto').value = '0';
-        document.getElementById('input_referencia').value = '';
+        // seleccionar el input y dejar listo para editar
+        setTimeout(() => {
+            const inp = document.getElementById('input_monto');
+            try { inp.focus(); inp.select(); } catch(e){}
+        }, 50);
         new bootstrap.Modal(document.getElementById('modalAgregarPago')).show();
     }
+
+    // Asegurar que si el usuario hace foco manual en el campo monto y su valor es 0,
+    // el campo se seleccione para facilitar sobreescribirlo.
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputMonto = document.getElementById('input_monto');
+        if (inputMonto) {
+            inputMonto.addEventListener('focus', function() {
+                const plain = parseFormattedNumberToPlain(this.value) || '';
+                if (plain === '' || plain === '0' || plain === '0.0') {
+                    try { this.select(); } catch(e) {}
+                }
+            });
+            // Formateo en vivo específico para este campo: mantener separador de miles
+            const formatMontoLive = function() {
+                let raw = this.value || '';
+                // quitar todo lo que no sea dígito
+                const digits = raw.replace(/[^0-9]/g, '');
+                if (digits === '') { this.value = ''; return; }
+                // parsear como entero
+                const n = parseInt(digits, 10) || 0;
+                // formatear con puntos de miles
+                const formatted = formatNumberWithDots(String(n));
+                // asignar y mover caret al final
+                this.value = formatted;
+                try { this.setSelectionRange(this.value.length, this.value.length); } catch(e){}
+            };
+
+            inputMonto.addEventListener('input', formatMontoLive);
+        }
+    });
 
     function agregarPago() {
         const formaId = document.getElementById('select_forma').value;
         const formaNombre = document.getElementById('select_forma').options[document.getElementById('select_forma').selectedIndex].text;
         const montoRaw = document.getElementById('input_monto').value || '0';
-        const monto = parseFloat(parseFormattedNumberToPlain(montoRaw)) || 0;
-        const referencia = document.getElementById('input_referencia').value || '';
+        // parseo robusto: quitar todo lo que no sea dígito, coma o punto; convertir miles (.) y coma decimal
+        function parseMoneyString(str) {
+            if (str === null || str === undefined) return 0;
+            let s = String(str).trim();
+            if (s === '') return 0;
+            // eliminar espacios
+            s = s.replace(/\s+/g, '');
+            // si tiene coma decimal (ej '1.234,56'), eliminar puntos y reemplazar coma por punto
+            if ((s.match(/,/g) || []).length === 1 && (s.match(/\./g) || []).length >= 1) {
+                s = s.replace(/\./g, '').replace(',', '.');
+            } else {
+                // eliminar puntos (miles) y reemplazar coma por punto
+                s = s.replace(/\./g, '').replace(',', '.');
+            }
+            const n = Number(s);
+            return isNaN(n) ? 0 : n;
+        }
+        const monto = parseMoneyString(montoRaw) || 0;
 
+        // Debug: mostrar en consola el valor crudo y parseado y existencia de elementos clave
+        try {
+            console.log('agregarPago:', { montoRaw: montoRaw, monto: monto, totalRecibidoEl: !!document.getElementById('totalRecibido'), diferenciaEl: !!document.getElementById('diferencia'), restanteEl: !!document.getElementById('restanteCobrar') });
+        } catch (e) { console.log('agregarPago: debug failed', e); }
         if (monto <= 0) {
             alert('Ingrese un monto mayor a 0');
             return;
         }
 
-        pagos.push({ forma_pago_id: formaId, forma_nombre: formaNombre, monto: monto, referencia: referencia });
+    pagos.push({ forma_pago_id: formaId, forma_nombre: formaNombre, monto: monto });
         renderPagos();
         updateTotals();
         bootstrap.Modal.getInstance(document.getElementById('modalAgregarPago')).hide();
@@ -334,8 +407,7 @@
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${p.forma_nombre || p.forma_pago_id}</td>
-                <td class="text-end">${formatNumber(p.monto)}</td>
-                <td class="text-center">${p.referencia || ''}</td>
+                <td class="text-end">${formatNumberWithDots(p.monto)}</td>
                 <td class="text-center"><button type="button" class="btn btn-sm btn-danger" onclick="quitarPago(${idx})">Quitar</button></td>
             `;
             tbody.appendChild(tr);
@@ -346,32 +418,91 @@
         const totalRecibido = pagos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
         const diferencia = totalRecibido - totalFactura;
 
-        document.getElementById('totalRecibido').textContent = formatNumber(totalRecibido) + ' Gs.';
-        document.getElementById('diferencia').textContent = formatNumber(diferencia) + ' Gs.';
-
-        const diffElement = document.getElementById('diferencia');
-        if (diferencia < 0) {
-            diffElement.className = 'text-danger';
-        } else if (Math.abs(diferencia) < 0.001) {
-            diffElement.className = 'text-success';
-        } else {
-            diffElement.className = 'text-info';
+        // asegurarse de que existan elementos donde mostrar totales; si no, crear placeholders ocultos
+        let totalRecEl = document.getElementById('totalRecibido');
+        let diffEl = document.getElementById('diferencia');
+        const formPago = document.getElementById('formPago');
+        if (!totalRecEl && formPago) {
+            totalRecEl = document.createElement('span');
+            totalRecEl.id = 'totalRecibido';
+            totalRecEl.style.display = 'none';
+            formPago.appendChild(totalRecEl);
+        }
+        if (!diffEl && formPago) {
+            diffEl = document.createElement('span');
+            diffEl.id = 'diferencia';
+            diffEl.style.display = 'none';
+            formPago.appendChild(diffEl);
         }
 
-        // Vuelto: only meaningful when there's efectivo in payments
+        if (totalRecEl) totalRecEl.textContent = formatNumber(totalRecibido) + ' Gs.';
+        if (diffEl) diffEl.textContent = formatNumber(diferencia) + ' Gs.';
+
+        // Mostrar restante por cobrar (total - recibido)
+        const restante = totalFactura - totalRecibido;
+        const restanteEl = document.getElementById('restanteCobrar');
+        if (restanteEl) {
+            if (restante <= 0) {
+                restanteEl.className = 'h5 text-success';
+                restanteEl.textContent = '0 Gs.';
+            } else {
+                restanteEl.className = 'h5 text-danger';
+                restanteEl.textContent = formatNumber(restante) + ' Gs.';
+            }
+        } else {
+            console.warn('updateTotals: elemento #restanteCobrar no encontrado');
+        }
+
+        // Ajustar color de la diferencia si el elemento existe
+        if (diffEl) {
+            if (diferencia < 0) {
+                diffEl.className = 'text-danger';
+            } else if (Math.abs(diferencia) < 0.001) {
+                diffEl.className = 'text-success';
+            } else {
+                diffEl.className = 'text-info';
+            }
+        }
+
+        // Vuelto: mostrar cuando la suma de pagos excede el total
         const vueltoDiv = document.getElementById('vueltoDiv');
-        const efectivoPago = pagos.find(p => (p.forma_nombre || '').toLowerCase().includes('efectivo') || String(p.forma_pago_id).toLowerCase() === 'efectivo');
-        const efectivo = efectivoPago ? parseFloat(efectivoPago.monto) : 0;
-        if (efectivo > 0 && diferencia > 0) {
-            // Vuelto máximo es la diferencia pero cannot exceed efectivo - needed_arbitrary
-            const vuelto = Math.min(diferencia, efectivo);
-            document.getElementById('vuelto').textContent = formatNumber(vuelto) + ' Gs.';
-            vueltoDiv.style.display = 'block';
-        } else {
-            vueltoDiv.style.display = 'none';
+        const vueltoEl = document.getElementById('vuelto');
+        const vueltoNoteContainer = document.getElementById('vuelto_note_container');
+        const vueltoNote = document.getElementById('vuelto_note');
+
+        // calcular efectivo disponible (suma de pagos cuya forma contiene 'efectivo')
+        const efectivoSum = pagos.reduce((s, p) => {
+            const name = (p.forma_nombre || '').toLowerCase();
+            if (name.includes('efectivo')) return s + (parseFloat(p.monto) || 0);
+            return s;
+        }, 0);
+
+        const vuelto = Math.max(0, diferencia);
+        if (vueltoDiv) {
+            if (vuelto > 0) {
+                const vueltoRounded = Math.round(vuelto);
+                if (vueltoEl) vueltoEl.textContent = formatNumberWithDots(String(vueltoRounded)) + ' Gs.';
+                vueltoDiv.style.display = 'block';
+
+                // Nota: indicar si no hay efectivo suficiente para devolver el vuelto
+                if (vueltoNoteContainer && vueltoNote) {
+                    if (efectivoSum < vueltoRounded) {
+                        const falta = Math.round(vueltoRounded - efectivoSum);
+                        vueltoNote.textContent = `No hay suficiente efectivo para devolver el vuelto. Falta: ${formatNumberWithDots(String(falta))} Gs. (Efectivo disponible: ${formatNumberWithDots(String(Math.round(efectivoSum))) } Gs.)`;
+                        vueltoNoteContainer.style.display = 'block';
+                    } else {
+                        // todo: podríamos mostrar 'Vuelto cubierto en efectivo' o esconder la nota
+                        vueltoNoteContainer.style.display = 'none';
+                    }
+                }
+            } else {
+                vueltoDiv.style.display = 'none';
+                if (vueltoNoteContainer) vueltoNoteContainer.style.display = 'none';
+            }
         }
 
-        document.getElementById('btnConfirmar').disabled = totalRecibido < totalFactura;
+        const btnConfirm = document.getElementById('btnConfirmar');
+        if (btnConfirm) btnConfirm.disabled = totalRecibido < totalFactura;
     }
 
     function formatNumber(num) {
@@ -406,7 +537,8 @@
     updateTotals();
 
     // Antes de enviar el formulario, serializar los pagos a pagos_json y limpiar campos fallback
-    document.getElementById('formPago').addEventListener('submit', function (e) {
+    document.getElementById('formPago').addEventListener('submit', async function (e) {
+        e.preventDefault();
         // Serializar pagos
         document.getElementById('pagos_json').value = JSON.stringify(pagos);
 
@@ -414,7 +546,85 @@
         document.getElementById('monto_efectivo').value = 0;
         document.getElementById('monto_debito').value = 0;
         document.getElementById('monto_credito').value = 0;
-        // allow form submit
+
+        const form = this;
+        const btn = document.getElementById('btnConfirmar');
+        if (btn) btn.disabled = true;
+
+        // preparar FormData
+        const formData = new FormData(form);
+
+        try {
+            const resp = await fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            });
+
+            if (!resp.ok) {
+                // Si hubo error, reactivar el botón y mostrar mensaje con más detalle en consola
+                if (btn) btn.disabled = false;
+                let bodyText = '';
+                try {
+                    bodyText = await resp.text();
+                } catch (e) {
+                    console.warn('No se pudo leer el cuerpo de la respuesta de error', e);
+                }
+                console.error('Error al procesar factura. status=', resp.status, 'body=', bodyText);
+                const userMsg = resp.status >= 500 ? 'Error del servidor. Revise los logs del servidor.' : 'Ocurrió un error al procesar la factura. Intente nuevamente.';
+                mostrarMensaje('Error', userMsg, 'error');
+                return;
+            }
+
+            // Al llegar aquí, asumimos que el servidor procesó la factura correctamente.
+            // Mostrar modal con el vuelto calculado en cliente
+            const totalRecibido = pagos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+            const vuelto = Math.max(0, Math.round(totalRecibido - totalFactura));
+
+            // Rellenar modal y mostrar
+            const modalVueltoEl = document.getElementById('modalVueltoText');
+            if (modalVueltoEl) modalVueltoEl.textContent = formatNumberWithDots(String(vuelto)) + ' Gs.';
+
+            // Mostrar modal de vuelto con comprobaciones: asegurar que el elemento exista y que Bootstrap esté cargado
+            const modalContainer = document.getElementById('modalVuelto');
+            let modalInstance = null;
+            if (modalContainer) {
+                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    try {
+                        modalInstance = new bootstrap.Modal(modalContainer);
+                        modalInstance.show();
+                    } catch (e) {
+                        console.error('Error inicializando Modal de Bootstrap:', e);
+                        // Fallback: hacer visible el modal sin inicializar la funcionalidad de Bootstrap
+                        modalContainer.style.display = 'block';
+                    }
+                } else {
+                    console.warn('Bootstrap no está disponible (window.bootstrap undefined). Mostrando modal simple.');
+                    modalContainer.style.display = 'block';
+                }
+            } else {
+                console.warn('Elemento #modalVuelto no encontrado en DOM.');
+            }
+
+            // Cuando la cajera presione cualquier tecla, ocultar modal (si está) y redirigir a ventas pendientes
+            const onKey = function () {
+                try {
+                    if (modalInstance && typeof modalInstance.hide === 'function') modalInstance.hide();
+                    else if (modalContainer) modalContainer.style.display = 'none';
+                } catch (e) {
+                    console.warn('Error cerrando modal de vuelto:', e);
+                }
+                document.removeEventListener('keydown', onKey);
+                window.location.href = "{{ url_for('facturacion.ventas_pendientes') }}";
+            };
+
+            document.addEventListener('keydown', onKey);
+
+        } catch (err) {
+            if (btn) btn.disabled = false;
+            mostrarMensaje('Error', 'No se pudo conectar con el servidor. Compruebe su conexión.', 'error');
+            console.error(err);
+        }
     });
 </script>
 {% endblock %}

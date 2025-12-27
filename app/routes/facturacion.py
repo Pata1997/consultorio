@@ -1,10 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_required, current_user
 from app import db
 from app.models import (Caja, Venta, VentaDetalle, Pago, FormaPago, Consulta,
                         ConsultaInsumo, ConsultaProcedimiento, Especialidad,
                         ConfiguracionConsultorio)
 from datetime import datetime, date
+import traceback
 from sqlalchemy import func
 from app.utils.number_utils import parse_decimal_from_form
 import json
@@ -184,11 +185,13 @@ def nueva_venta_desde_consulta(consulta_id):
     
     consulta = Consulta.query.get_or_404(consulta_id)
     
-    # Verificar que no esté ya facturada
+    # Verificar existencia de venta vinculada
     venta_existente = Venta.query.filter_by(consulta_id=consulta_id).first()
-    if venta_existente:
+    # Si existe y ya fue pagada, impedir volver a facturar
+    if venta_existente and venta_existente.estado == 'pagada':
         flash('Esta consulta ya fue facturada', 'warning')
         return redirect(url_for('facturacion.nueva_venta'))
+    # Si existe y está pendiente, permitir continuar para facturar/editar la venta pendiente
     
     # Verificar caja abierta
     caja = Caja.query.filter_by(
@@ -247,8 +250,16 @@ def procesar_factura(consulta_id):
     
     consulta = Consulta.query.get_or_404(consulta_id)
     
-    # Verificar si ya existe una venta vinculada a la consulta
-    venta_existente = Venta.query.filter_by(consulta_id=consulta_id).first()
+    # Verificar si ya existe una venta vinculada a la consulta (preferir la pendiente)
+    venta_existente = Venta.query.filter_by(consulta_id=consulta_id, estado='pendiente').first()
+    # Log venta existente para trazabilidad
+    try:
+        if venta_existente:
+            current_app.logger.debug(f"[procesar_factura] venta_existente found id={venta_existente.id} estado={venta_existente.estado} consulta_id={consulta_id}")
+        else:
+            current_app.logger.debug(f"[procesar_factura] no venta_existente for consulta_id={consulta_id}")
+    except Exception:
+        pass
     if venta_existente and venta_existente.estado == 'pagada':
         flash('Esta consulta ya fue facturada', 'error')
         return redirect(url_for('facturacion.nueva_venta'))
@@ -335,6 +346,10 @@ def procesar_factura(consulta_id):
             # eliminar detalles anteriores (si los tuvo) para re-generar
             VentaDetalle.query.filter_by(venta_id=venta.id).delete()
             db.session.flush()
+            try:
+                current_app.logger.debug(f"[procesar_factura] Prepared venta (existing) id={venta.id} estado={venta.estado} numero_factura={venta.numero_factura}")
+            except Exception:
+                pass
         else:
             # Crear venta nueva
             venta = Venta(
@@ -474,15 +489,60 @@ def procesar_factura(consulta_id):
             )
             db.session.add(pago)
         
-        # Actualizar total vendido en caja
-        caja.total_vendido = (caja.total_vendido or 0) + total
+    # Nota: no usamos un campo persistente `total_vendido` en la tabla `cajas`.
+    # El total vendido se calcula cuando se consulta el estado de la caja sumando las ventas pagadas.
+    # (Evitar asignar atributo no persistente en el objeto `caja`.)
         
-        db.session.commit()
-        
-        flash(f'Factura #{numero_factura} generada exitosamente', 'success')
-        return redirect(url_for('facturacion.ver_factura', id=venta.id))
+        try:
+            try:
+                current_app.logger.debug(f"[procesar_factura] About to commit venta id={venta.id if 'venta' in locals() else 'n/a'} pagos_count={len(pagos_list) if 'pagos_list' in locals() else 'n/a'} total={total if 'total' in locals() else 'n/a'}")
+            except Exception:
+                pass
+
+            db.session.commit()
+
+            try:
+                current_app.logger.debug(f"[procesar_factura] Commit successful for venta id={venta.id}")
+            except Exception:
+                pass
+
+            # Post-commit verification: read fresh from DB and log state
+            try:
+                venta_after = Venta.query.get(venta.id)
+                current_app.logger.debug(f"[procesar_factura] After commit venta id={getattr(venta_after, 'id', 'n/a')} estado={getattr(venta_after, 'estado', 'n/a')} numero_factura={getattr(venta_after, 'numero_factura', 'n/a')}")
+                print(f"[procesar_factura] After commit venta id={getattr(venta_after, 'id', 'n/a')} estado={getattr(venta_after, 'estado', 'n/a')} numero_factura={getattr(venta_after, 'numero_factura', 'n/a')}")
+            except Exception as e_read:
+                try:
+                    current_app.logger.error(f"[procesar_factura] Error reading venta after commit: {e_read}")
+                except Exception:
+                    pass
+                print(f"[procesar_factura] Error reading venta after commit: {e_read}")
+
+            flash(f'Factura #{numero_factura} generada exitosamente', 'success')
+            return redirect(url_for('facturacion.ver_factura', id=venta.id))
+        except Exception as e_commit:
+            # Log commit exception with traceback and print so it's visible in console
+            try:
+                tb_commit = traceback.format_exc()
+                current_app.logger.error(f"[procesar_factura] Commit exception: {e_commit}\n{tb_commit}")
+            except Exception:
+                pass
+            print(f"[procesar_factura] Commit exception: {e_commit}")
+            try:
+                print(traceback.format_exc())
+            except Exception:
+                pass
+            db.session.rollback()
+            flash(f'Error al procesar la factura: {str(e_commit)}', 'error')
+            return redirect(url_for('facturacion.nueva_venta_desde_consulta', consulta_id=consulta_id))
         
     except Exception as e:
+        # Log exception with traceback to help debugging why commit/updates may be rolled back
+        try:
+            tb = traceback.format_exc()
+            current_app.logger.error(f"[procesar_factura] Exception: {e}\n{tb}")
+        except Exception:
+            pass
         db.session.rollback()
         flash(f'Error al procesar la factura: {str(e)}', 'error')
         return redirect(url_for('facturacion.nueva_venta_desde_consulta', consulta_id=consulta_id))

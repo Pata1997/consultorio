@@ -96,6 +96,10 @@ document.addEventListener('DOMContentLoaded', function() {
             formatted += ',' + decPart.slice(0, 2);
         }
 
+        // debug: log for the specific modal input to trace unexpected truncation
+        if (input.id === 'input_monto') {
+            console.debug('formatCurrencyInput (input_monto):', { before: input.value, plain: plain, formatted: formatted });
+        }
         input.value = formatted;
 
         // Reubicar caret: buscar la posición que corresponde a digitsBefore
