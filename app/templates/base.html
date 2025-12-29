@@ -53,6 +53,16 @@
                             <li><a class="dropdown-item" href="{{ url_for('consultorio.listar_insumos') }}">Insumos</a></li>
                         </ul>
                     </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-people"></i> RRHH
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_vacaciones') }}"><i class="bi bi-calendar-x"></i> Mis Vacaciones</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_permisos') }}"><i class="bi bi-clock"></i> Mis Permisos</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_asistencias') }}"><i class="bi bi-person-check"></i> Mi Asistencia</a></li>
+                        </ul>
+                    </li>
                     {% elif current_user.rol == 'admin' %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
@@ -65,16 +75,32 @@
                     </li>
                     {% endif %}
                     
-                    {% if current_user.rol in ['admin', 'cajero'] %}
+                    {# Menú Caja - Para cajeros y admin #}
+                    {% if current_user.rol in ['admin', 'cajero', 'cajera'] %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-cash-stack"></i> Facturación
+                            <i class="bi bi-cash-coin"></i> Caja
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{{ url_for('facturacion.estado_caja') }}">Caja</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('facturacion.ventas_pendientes') }}">Ventas pendientes</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('facturacion.listar_ventas') }}">Ventas</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('facturacion.reporte_ventas') }}">Reportes</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('facturacion.estado_caja') }}"><i class="bi bi-cash-stack"></i> Estado de Caja</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Reportes de Caja</h6></li>
+                            <li><a class="dropdown-item" href="{{ url_for('facturacion.reporte_ventas') }}"><i class="bi bi-graph-up"></i> Reporte de Ventas</a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                    
+                    {# Menú Facturación - Para cajeros y admin #}
+                    {% if current_user.rol in ['admin', 'cajero', 'cajera'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-receipt"></i> Facturación
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('facturacion.ventas_pendientes') }}"><i class="bi bi-clock-history"></i> Ventas Pendientes</a></li>
+                            {% if current_user.rol == 'admin' %}
+                            <li><a class="dropdown-item" href="{{ url_for('facturacion.listar_ventas') }}"><i class="bi bi-list-check"></i> Todas las Ventas</a></li>
+                            {% endif %}
                         </ul>
                     </li>
                     {% endif %}
@@ -95,6 +121,25 @@
                             {% endif %}
                         </ul>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('usuarios.listar_usuarios') }}">
+                            <i class="bi bi-people-fill"></i> Usuarios
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {# Menú RRHH para recepción y caja #}
+                    {% if current_user.rol in ['recepcionista', 'cajero', 'cajera'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-people"></i> RRHH
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_vacaciones') }}"><i class="bi bi-calendar-x"></i> Mis Vacaciones</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_permisos') }}"><i class="bi bi-clock"></i> Mis Permisos</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_asistencias') }}"><i class="bi bi-person-check"></i> Mi Asistencia</a></li>
+                        </ul>
+                    </li>
                     {% endif %}
                     
                     {# Admin: link para gestionar precios de procedimientos #}
@@ -102,6 +147,14 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('consultorio.gestionar_precios') }}">
                             <i class="bi bi-tag"></i> Precios Procedimientos
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% if current_user.rol == 'admin' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('configuracion.listar_especialidades') }}">
+                            <i class="bi bi-currency-dollar"></i> Precios Consultas
                         </a>
                     </li>
                     {% endif %}
@@ -121,7 +174,6 @@
                             <i class="bi bi-person-circle"></i> {{ current_user.username }}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="#"><i class="bi bi-gear"></i> Perfil</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right"></i> Cerrar Sesión</a></li>
                         </ul>

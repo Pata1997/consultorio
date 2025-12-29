@@ -113,13 +113,6 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     currencyInputs.forEach(inp => {
-        inp.addEventListener('focus', function() {
-            // al enfocar, dejar el valor sin formatear para facilitar edición
-            const plain = parseFormattedNumberToPlain(this.value);
-            this.value = plain;
-            try { this.setSelectionRange(this.value.length, this.value.length); } catch(e){}
-        });
-
         // Formateo en tiempo real mientras se escribe
         inp.addEventListener('input', function() {
             formatCurrencyInput(this);
@@ -127,14 +120,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
         inp.addEventListener('blur', function() {
             // asegurar formato final al salir
-            const formatted = formatNumberWithDots(this.value);
-            this.value = formatted;
+            const plain = parseFormattedNumberToPlain(this.value);
+            if (plain !== '') {
+                this.value = formatNumberWithDots(plain);
+            }
         });
 
         // formatear inicialmente si ya tiene valor
         if (inp.value && inp.value.trim() !== '') {
             inp.value = formatNumberWithDots(inp.value);
         }
+    });
+
+    // Interceptar submit de formularios con currency-inputs para asegurar formato correcto
+    const formsWithCurrency = document.querySelectorAll('form');
+    formsWithCurrency.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            // Antes de enviar, convertir todos los currency-inputs a formato plano
+            const currencyFields = this.querySelectorAll('.currency-input');
+            currencyFields.forEach(field => {
+                const plainValue = parseFormattedNumberToPlain(field.value);
+                field.value = plainValue;
+            });
+        });
     });
 });
 

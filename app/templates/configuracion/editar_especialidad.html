@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Especialidad{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>✏️ Editar Especialidad</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Inicio</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('configuracion.listar_especialidades') }}">Especialidades</a></li>
+                    <li class="breadcrumb-item active">Editar</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-pencil-square"></i> Datos de la Especialidad
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('configuracion.editar_especialidad', id=especialidad.id) }}">
+                        <div class="mb-3">
+                            <label for="nombre" class="form-label">Nombre de la Especialidad *</label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" 
+                                   value="{{ especialidad.nombre }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="descripcion" class="form-label">Descripción</label>
+                            <textarea class="form-control" id="descripcion" name="descripcion" 
+                                      rows="2">{{ especialidad.descripcion or '' }}</textarea>
+                            <div class="form-text">Descripción breve de la especialidad (opcional)</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="precio_consulta" class="form-label">Precio de Consulta (IVA Incluido) *</label>
+                            <div class="input-group">
+                                <input type="text" 
+                                       class="form-control currency-input" 
+                                       id="precio_consulta" 
+                                       name="precio_consulta" 
+                                       value="{{ '{:,.0f}'.format(especialidad.precio_consulta) }}" 
+                                       required>
+                                <span class="input-group-text">Gs.</span>
+                            </div>
+                            <div class="form-text">
+                                <i class="bi bi-info-circle"></i> 
+                                El precio incluye IVA. El paciente pagará exactamente este monto.
+                            </div>
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="activo" name="activo" 
+                                   {% if especialidad.activo %}checked{% endif %}>
+                            <label class="form-check-label" for="activo">
+                                Especialidad Activa
+                            </label>
+                            <div class="form-text">
+                                Solo las especialidades activas aparecen al agendar citas
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Importante:</strong> El cambio de precio afectará a las nuevas consultas. 
+                            Las consultas ya registradas mantendrán el precio al momento de su creación.
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('configuracion.listar_especialidades') }}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Volver
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Guardar Cambios
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Aplicar formato de moneda en el campo de precio
+    document.addEventListener('DOMContentLoaded', function() {
+        const precioInput = document.getElementById('precio_consulta');
+        
+        if (precioInput) {
+            // Formatear al cargar
+            formatCurrencyInput(precioInput);
+            
+            // Formatear mientras escribe
+            precioInput.addEventListener('input', function(e) {
+                formatCurrencyInput(e.target);
+            });
+        }
+    });
+</script>
+{% endblock %}

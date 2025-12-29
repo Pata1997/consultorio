@@ -20,6 +20,49 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib import colors
 
+bp = Blueprint('consultorio', __name__, url_prefix='/consultorio')
+
+
+def _resolver_precio_procedimiento(procedimiento_id, medico_id=None, especialidad_id=None):
+    """
+    Resuelve el precio de un procedimiento según la regla de prioridad:
+    1) Precio específico para (procedimiento_id, medico_id)
+    2) Precio para (procedimiento_id, especialidad_id)
+    3) procedimiento.precio (valor por defecto)
+    
+    Args:
+        procedimiento_id: ID del procedimiento
+        medico_id: ID del médico (opcional)
+        especialidad_id: ID de la especialidad (opcional)
+        
+    Returns:
+        Decimal: Precio resuelto del procedimiento
+    """
+    # Prioridad 1: Precio específico para médico
+    if medico_id:
+        precio_medico = ProcedimientoPrecio.query.filter_by(
+            procedimiento_id=procedimiento_id,
+            medico_id=medico_id
+        ).first()
+        if precio_medico:
+            return precio_medico.precio
+    
+    # Prioridad 2: Precio para especialidad
+    if especialidad_id:
+        precio_especialidad = ProcedimientoPrecio.query.filter_by(
+            procedimiento_id=procedimiento_id,
+            especialidad_id=especialidad_id
+        ).first()
+        if precio_especialidad:
+            return precio_especialidad.precio
+    
+    # Prioridad 3: Precio base del procedimiento
+    procedimiento = Procedimiento.query.get(procedimiento_id)
+    if procedimiento:
+        return procedimiento.precio
+    
+    return Decimal('0')
+
 
 def _resolve_logo_path(config):
     """Try several locations for the clinic logo and return a valid filesystem path or None."""
@@ -157,7 +200,6 @@ def _build_membrete_table(config, styles, max_logo_w=50*mm, max_logo_h=30*mm):
 
     return header_table, _on_page
 
-bp = Blueprint('consultorio', __name__, url_prefix='/consultorio')
 
 @bp.route('/consultas')
 @login_required
@@ -317,30 +359,30 @@ def nueva_consulta(cita_id):
             except (ValueError, TypeError):
                 # si la cantidad está vacía o inválida, saltar
                 continue
-                
-                # Registrar uso de insumo
-                consulta_insumo = ConsultaInsumo(
-                    consulta_id=consulta.id,
-                    insumo_id=insumo.id,
-                    cantidad=cantidad,
-                    precio_unitario=insumo.precio_unitario,
-                    subtotal=insumo.precio_unitario * cantidad
-                )
-                db.session.add(consulta_insumo)
-                
-                # Actualizar stock
-                insumo.cantidad_actual -= cantidad
-                
-                # Registrar movimiento
-                movimiento = MovimientoInsumo(
-                    insumo_id=insumo.id,
-                    tipo='salida',
-                    cantidad=-cantidad,
-                    motivo='Uso en consulta',
-                    consulta_id=consulta.id,
-                    usuario_id=current_user.id
-                )
-                db.session.add(movimiento)
+            
+            # Registrar uso de insumo
+            consulta_insumo = ConsultaInsumo(
+                consulta_id=consulta.id,
+                insumo_id=insumo.id,
+                cantidad=cantidad,
+                precio_unitario=insumo.precio_unitario,
+                subtotal=insumo.precio_unitario * cantidad
+            )
+            db.session.add(consulta_insumo)
+            
+            # Actualizar stock
+            insumo.cantidad_actual -= cantidad
+            
+            # Registrar movimiento
+            movimiento = MovimientoInsumo(
+                insumo_id=insumo.id,
+                tipo='salida',
+                cantidad=-cantidad,
+                motivo='Uso en consulta',
+                consulta_id=consulta.id,
+                usuario_id=current_user.id
+            )
+            db.session.add(movimiento)
         
         # Procesar procedimientos
         procedimiento_ids = request.form.getlist('procedimientos[]')
@@ -349,10 +391,17 @@ def nueva_consulta(cita_id):
             if proc_id:
                 procedimiento = Procedimiento.query.get(int(proc_id))
                 if procedimiento:
+                    # Resolver precio según regla de prioridad: médico > especialidad > base
+                    precio_resuelto = _resolver_precio_procedimiento(
+                        procedimiento_id=procedimiento.id,
+                        medico_id=consulta.medico_id,
+                        especialidad_id=consulta.especialidad_id
+                    )
+                    
                     consulta_proc = ConsultaProcedimiento(
                         consulta_id=consulta.id,
                         procedimiento_id=procedimiento.id,
-                        precio=procedimiento.precio
+                        precio=precio_resuelto
                     )
                     db.session.add(consulta_proc)
         
@@ -363,11 +412,9 @@ def nueva_consulta(cita_id):
 
         # Crear/actualizar venta pendiente para que la cajera la facture
         try:
-            # ConsultaProcedimiento is already imported at module level above.
-            # Re-importing it here would make it a local name in this function
-            # and therefore shadow the module-level symbol, causing UnboundLocalError
-            # if referenced earlier in the function. Import only the other models.
-            from app.models import Caja, Venta, VentaDetalle, ConsultaInsumo, ConfiguracionConsultorio
+            # ConsultaProcedimiento y ConsultaInsumo ya están importados al inicio del módulo
+            # Solo importar los modelos que no están importados aún
+            from app.models import Caja, Venta, VentaDetalle, ConfiguracionConsultorio
 
             # Crear una venta pendiente para que la cajera la facture.
             # Si ya existe una venta vinculada a esta consulta, no crear otra.
@@ -388,8 +435,10 @@ def nueva_consulta(cita_id):
                 total_insumos = sum(float(i.subtotal) for i in insumos)
 
                 subtotal = precio_consulta + total_procedimientos + total_insumos
-                iva = subtotal * 0.10
-                total = subtotal + iva
+                # IVA incluido (Paraguay): total es la suma de precios, IVA = total/11
+                total = subtotal
+                iva = total / 11
+                subtotal = total - iva  # Gravadas (base imponible)
 
                 # Generar número provisional único para la venta pendiente
                 import time
@@ -402,7 +451,7 @@ def nueva_consulta(cita_id):
                     ruc_factura=paciente.ruc or paciente.cedula or '',
                     # Si tiene razón social usarla, sino nombre completo
                     nombre_factura=paciente.razon_social or paciente.nombre_completo,
-                    direccion_factura=paciente.direccion_facturacion or paciente.direccion or '',
+                    direccion_facturacion=paciente.direccion_facturacion or paciente.direccion or '',
                     caja_id=(caja.id if caja else None),
                     consulta_id=consulta.id,
                     paciente_id=consulta.paciente_id,
@@ -458,8 +507,10 @@ def nueva_consulta(cita_id):
                     db.session.add(detalle)
 
                 db.session.commit()
-        except Exception:
+        except Exception as e:
             # No bloquear el flujo si falla la creación de la venta pendiente
+            current_app.logger.error(f"[nueva_consulta] Error al crear venta pendiente: {str(e)}")
+            current_app.logger.exception(e)
             db.session.rollback()
 
         flash('Consulta registrada exitosamente', 'success')
@@ -472,11 +523,11 @@ def nueva_consulta(cita_id):
     consultas_previas = Consulta.query.filter_by(paciente_id=paciente.id)\
         .order_by(Consulta.fecha.desc()).limit(5).all()
     
-    # Obtener insumos de la especialidad
-    insumos_esp = InsumoEspecialidad.query.filter_by(
-        especialidad_id=cita.especialidad_id
-    ).all()
-    insumos_disponibles = [ie.insumo for ie in insumos_esp if ie.insumo.activo and ie.insumo.cantidad_actual > 0]
+    # Obtener TODOS los insumos activos con stock disponible
+    # (no solo los de la especialidad, para mayor flexibilidad)
+    insumos_disponibles = Insumo.query.filter_by(activo=True)\
+        .filter(Insumo.cantidad_actual > 0)\
+        .order_by(Insumo.nombre).all()
     
     # Obtener procedimientos de la especialidad
     procedimientos_disponibles = Procedimiento.query.filter_by(
@@ -535,65 +586,46 @@ def receta_pdf(consulta_id, receta_id):
 
     story = []
 
-    # Timestamp (small) - top-left
-    timestamp = consulta.fecha.strftime('%d/%m/%Y, %H:%M')
-    story.append(Paragraph(f'<font size=8 color="#444444">{timestamp}</font>', ParagraphStyle('ts', parent=styles['Normal'], alignment=TA_LEFT)))
-    story.append(Spacer(1, 6))
+    # Timestamp para usar en la tabla
+    timestamp = consulta.fecha.strftime('%d/%m/%Y')
 
-    # Clinic header: colored brand band with logo + clinic info (membrete más atractivo)
+    # Membrete compacto (igual que arqueo)
     logo_path = _resolve_logo_path(config)
     logo_elem = None
-    max_logo_w = 50 * mm
-    max_logo_h = 30 * mm
     if logo_path:
         try:
-            # Try to preserve aspect ratio using ImageReader
-            img_reader = ImageReader(logo_path)
-            iw, ih = img_reader.getSize()
-            if iw and ih:
-                # iw, ih are image pixels; compute ratio to fit into box (approx points)
-                ratio = min((max_logo_w) / float(iw), (max_logo_h) / float(ih))
-                # Fallback if ratio too large or small
-                if ratio <= 0 or ratio > 10:
-                    ratio = min(max_logo_w / float(iw if iw else 1), max_logo_h / float(ih if ih else 1))
-                w = iw * ratio
-                h = ih * ratio
-                logo_elem = RLImage(logo_path, width=w, height=h)
-            else:
-                logo_elem = RLImage(logo_path, width=max_logo_w, height=max_logo_h)
+            logo_elem = RLImage(logo_path, width=0.6*inch, height=0.6*inch)
         except Exception:
             logo_elem = None
 
-    # Clinic info paragraph (we will put it on a colored band)
-    clinic_html = f"<b>{config.nombre or 'Consultorio Médico'}</b><br/><font size=9>{(config.direccion or '')}<br/>Tel: {config.telefono or ''} &nbsp;&nbsp; RUC: {config.ruc or ''}</font>"
-    clinic_para = Paragraph(clinic_html, ParagraphStyle('Clinic', parent=styles['Normal'], fontSize=10, leading=12, textColor=colors.white))
+    # Info consultorio compacta
+    clinic_html = f"<b><font size=10>{config.nombre or 'Consultorio Médico'}</font></b><br/><font size=7>{config.direccion or ''}<br/>Tel: {config.telefono or 'N/A'} | Email: {config.email or 'N/A'}<br/>RUC: {config.ruc or ''}</font>"
+    clinic_para = Paragraph(clinic_html, ParagraphStyle('Clinic', parent=styles['Normal'], fontSize=10, leading=10))
 
-    # Build header band table. If we have a logo, keep it on left; otherwise center text on band.
+    # Tabla membrete
     if logo_elem:
-        header_table = Table([[logo_elem, clinic_para]], colWidths=[(max_logo_w + 6), None])
+        header_table = Table([[logo_elem, clinic_para]], colWidths=[0.8*inch, 5*inch])
     else:
-        header_table = Table([[clinic_para]], colWidths=[None])
+        header_table = Table([[clinic_para]], colWidths=[6.5*inch])
 
     header_table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0b5ed7')),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('LEFTPADDING', (0,0), (-1,-1), 8),
-        ('RIGHTPADDING', (0,0), (-1,-1), 8),
-        ('TOPPADDING', (0,0), (-1,-1), 8),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('ALIGN', (0,0), (0,0), 'CENTER'),
+        ('ALIGN', (1,0), (1,0), 'LEFT'),
     ]))
-    # Make sure text in second column is white
-    if logo_elem:
-        header_table.setStyle(TableStyle([('TEXTCOLOR', (1,0), (1,0), colors.white)]))
-
     story.append(header_table)
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 0.1*inch))
 
-    # Title centered (prominent)
-    story.append(Paragraph('RECETA MÉDICA', ParagraphStyle('TitleCenter', parent=styles['Heading2'], alignment=TA_CENTER, fontSize=20, leading=22, spaceAfter=6)))
-    story.append(Spacer(1, 6))
+    # Título compacto
+    story.append(Paragraph('RECETA MÉDICA', ParagraphStyle('TituloCompacto', parent=styles['Heading1'], alignment=TA_CENTER, fontSize=12, spaceAfter=4)))
+    story.append(Spacer(1, 0.1*inch))
+    
+    # Línea separadora
+    line_table = Table([['_' * 100]], colWidths=[6.5*inch])
+    story.append(line_table)
+    story.append(Spacer(1, 0.1*inch))
 
-    # Patient / doctor info (styled table)
+    # Patient / doctor info (tabla compacta)
     try:
         paciente_nombre = consulta.paciente.nombre_completo
         paciente_cedula = consulta.paciente.cedula or ''
@@ -601,23 +633,25 @@ def receta_pdf(consulta_id, receta_id):
         paciente_nombre = ''
         paciente_cedula = ''
     medico_nombre = consulta.medico.nombre_completo if consulta.medico else ''
-    especialidad = consulta.especialidad.nombre if consulta.especialidad else ''
+    reg_prof = consulta.medico.registro_profesional if consulta.medico else ''
+    
     info_table = Table([
-        [Paragraph('<b>Paciente:</b>', header_style), Paragraph(paciente_nombre, body_style)],
-        [Paragraph('<b>Cédula:</b>', header_style), Paragraph(paciente_cedula, body_style)],
-        [Paragraph('<b>Médico:</b>', header_style), Paragraph(medico_nombre, body_style)],
-        [Paragraph('<b>Especialidad:</b>', header_style), Paragraph(especialidad, body_style)]
-    ], colWidths=[30*mm, None])
+        [Paragraph('<b>Médico:</b>', header_style), Paragraph(medico_nombre, body_style), 
+         Paragraph('<b>Reg. Prof.:</b>', header_style), Paragraph(reg_prof, body_style)],
+        [Paragraph('<b>Paciente:</b>', header_style), Paragraph(paciente_nombre, body_style),
+         Paragraph('<b>Fecha:</b>', header_style), Paragraph(timestamp, body_style)],
+    ], colWidths=[1*inch, 2.5*inch, 1*inch, 2*inch])
     info_table.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
-        ('FONTSIZE', (0,0), (-1,-1), 10),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-        ('LEFTPADDING', (0,0), (-1,-1), 0),
-        ('BACKGROUND', (0,0), (-1,0), colors.whitesmoke),
+        ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
+        ('FONTNAME', (2,0), (2,-1), 'Helvetica-Bold'),
+        ('FONTNAME', (1,0), (1,-1), 'Helvetica'),
+        ('FONTNAME', (3,0), (3,-1), 'Helvetica'),
+        ('FONTSIZE', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
     ]))
     story.append(info_table)
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 0.15*inch))
 
     # Body
     text = receta.indicaciones or ''

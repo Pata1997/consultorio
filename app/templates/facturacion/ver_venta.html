@@ -108,17 +108,17 @@
                         </div>
                         <div class="col-4">
                             <table class="table table-sm">
-                                <tr>
-                                    <td><strong>Subtotal:</strong></td>
-                                    <td class="text-end">{{ venta.subtotal|format_currency }} Gs.</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>IVA 10%:</strong></td>
-                                    <td class="text-end">{{ venta.iva|format_currency }} Gs.</td>
-                                </tr>
                                 <tr class="table-primary">
                                     <td><h5 class="mb-0"><strong>TOTAL:</strong></h5></td>
                                     <td class="text-end"><h5 class="mb-0"><strong>{{ venta.total|format_currency }} Gs.</strong></h5></td>
+                                </tr>
+                                <tr>
+                                    <td><small>Gravadas 10%:</small></td>
+                                    <td class="text-end"><small>{{ venta.subtotal|format_currency }} Gs.</small></td>
+                                </tr>
+                                <tr>
+                                    <td><small>IVA 10%:</small></td>
+                                    <td class="text-end"><small>{{ venta.iva|format_currency }} Gs.</small></td>
                                 </tr>
                             </table>
 
@@ -129,7 +129,7 @@
                                 {% for pago in venta.pagos %}
                                 <p class="mb-1">
                                     <small>
-                                        {{ pago.forma_pago.nombre.replace('_', ' ').title() }}: 
+                                        {{ pago.forma_pago_rel.nombre.replace('_', ' ').title() }}: 
                                         {{ pago.monto|format_currency }} Gs.
                                         {% if pago.referencia %}
                                         <br>Ref: {{ pago.referencia }}
@@ -145,7 +145,7 @@
                     <!-- Footer -->
                     <div class="row border-top pt-3 mt-4">
                         <div class="col-6">
-                            <p class="mb-0"><small><strong>Cajero:</strong> {{ venta.usuario_registro.nombre_completo }}</small></p>
+                            <p class="mb-0"><small><strong>Cajero:</strong> {{ venta.usuario_registro_rel.username if venta.usuario_registro_rel else 'N/A' }}</small></p>
                         </div>
                         <div class="col-6 text-end">
                             <p class="mb-0"><small>Estado: 

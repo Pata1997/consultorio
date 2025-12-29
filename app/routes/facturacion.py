@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app, send_file
 from flask_login import login_required, current_user
 from app import db
 from app.models import (Caja, Venta, VentaDetalle, Pago, FormaPago, Consulta,
@@ -8,7 +8,30 @@ from datetime import datetime, date
 import traceback
 from sqlalchemy import func
 from app.utils.number_utils import parse_decimal_from_form
+from app.utils.pdf_generator import ArqueoCajaPDF
+from app.utils.ticket_generator import generar_ticket_pdf
+import os
 import json
+import io
+
+"""
+IMPORTANTE: IVA INCLUIDO - SISTEMA PARAGUAYO
+
+En Paraguay, todos los precios incluyen IVA (10%).
+El cálculo correcto es:
+- TOTAL = suma de todos los precios (lo que ve y paga el cliente)
+- IVA = TOTAL / 11  (equivalente a TOTAL × 10/110)
+- GRAVADAS = TOTAL - IVA  (equivalente a TOTAL × 100/110)
+
+Ejemplo:
+- Consulta: 350.000 Gs
+- Procedimiento: 80.000 Gs
+- TOTAL: 430.000 Gs ← el cliente paga esto
+- IVA 10%: 39.091 Gs (430.000 ÷ 11)
+- Gravadas: 390.909 Gs (430.000 - 39.091)
+
+NUNCA sumar IVA al final (eso sería IVA agregado, incorrecto para Paraguay).
+"""
 
 bp = Blueprint('facturacion', __name__, url_prefix='/facturacion')
 
@@ -23,14 +46,17 @@ def estado_caja():
     ).first()
     
     # Estadísticas si hay caja abierta
-    total_vendido = 0
+    from decimal import Decimal
+    total_vendido = Decimal('0')
+    ventas = []
     if caja_abierta:
-        ventas = Venta.query.filter_by(caja_id=caja_abierta.id, estado='pagada').all()
-        total_vendido = sum(float(v.total) for v in ventas)
+        ventas = Venta.query.filter_by(caja_id=caja_abierta.id, estado='pagada').order_by(Venta.fecha.desc()).all()
+        total_vendido = sum((v.total for v in ventas), Decimal('0'))
     
     return render_template('facturacion/estado_caja.html',
                          caja=caja_abierta,
-                         total_vendido=total_vendido)
+                         total_vendido=total_vendido,
+                         ventas=ventas)
 
 @bp.route('/caja/abrir', methods=['POST'])
 @login_required
@@ -46,11 +72,13 @@ def abrir_caja():
         flash('Ya tiene una caja abierta', 'warning')
         return redirect(url_for('facturacion.estado_caja'))
     
-    monto_inicial = parse_decimal_from_form(request.form.get('monto_inicial', '0')) or 0
-    try:
-        monto_inicial = float(monto_inicial)
-    except Exception:
-        monto_inicial = 0
+    from decimal import Decimal
+    monto_inicial_raw = request.form.get('monto_inicial', '0')
+    current_app.logger.debug(f"[abrir_caja] monto_inicial_raw recibido: '{monto_inicial_raw}'")
+    monto_inicial = parse_decimal_from_form(monto_inicial_raw)
+    current_app.logger.debug(f"[abrir_caja] monto_inicial parseado: {monto_inicial}")
+    if monto_inicial is None:
+        monto_inicial = Decimal('0')
     
     caja = Caja(
         monto_inicial=monto_inicial,
@@ -76,11 +104,10 @@ def cerrar_caja():
         flash('No hay caja abierta', 'warning')
         return redirect(url_for('facturacion.estado_caja'))
     
-    monto_final = parse_decimal_from_form(request.form.get('monto_final', '0')) or 0
-    try:
-        monto_final = float(monto_final)
-    except Exception:
-        monto_final = 0
+    from decimal import Decimal
+    monto_final = parse_decimal_from_form(request.form.get('monto_final', '0'))
+    if monto_final is None:
+        monto_final = Decimal('0')
 
     caja.monto_final = monto_final
     caja.fecha_cierre = datetime.utcnow()
@@ -111,8 +138,10 @@ def arqueo_caja(id):
         Pago.estado == 'confirmado'
     ).group_by(FormaPago.nombre).all()
     
-    total_esperado = sum(float(v.total) for v in ventas if v.estado == 'pagada')
-    diferencia = float(caja.monto_final or 0) - (float(caja.monto_inicial) + total_esperado)
+    from decimal import Decimal
+    total_esperado = sum((v.total for v in ventas if v.estado == 'pagada'), Decimal('0'))
+    monto_final = caja.monto_final if caja.monto_final else Decimal('0')
+    diferencia = monto_final - (caja.monto_inicial + total_esperado)
     
     return render_template('facturacion/arqueo_caja.html',
                          caja=caja,
@@ -120,6 +149,44 @@ def arqueo_caja(id):
                          formas_pago=formas_pago,
                          total_esperado=total_esperado,
                          diferencia=diferencia)
+
+@bp.route('/caja/<int:id>/arqueo/pdf')
+@login_required
+def descargar_arqueo_pdf(id):
+    """Generar y descargar PDF del arqueo de caja"""
+    caja = Caja.query.get_or_404(id)
+    
+    # Obtener ventas de la caja
+    ventas = Venta.query.filter_by(caja_id=id).all()
+    
+    # Calcular totales por forma de pago
+    formas_pago = db.session.query(
+        FormaPago.nombre,
+        func.sum(Pago.monto).label('total')
+    ).join(Pago).join(Venta).filter(
+        Venta.caja_id == id,
+        Pago.estado == 'confirmado'
+    ).group_by(FormaPago.nombre).all()
+    
+    # Obtener configuración
+    config = ConfiguracionConsultorio.query.first()
+    
+    # Generar nombre del archivo
+    fecha_str = caja.fecha_cierre.strftime('%Y%m%d_%H%M') if caja.fecha_cierre else datetime.now().strftime('%Y%m%d_%H%M')
+    filename = f'Arqueo_Caja_{id}_{fecha_str}.pdf'
+    
+    # Crear ruta absoluta a la carpeta reports en la raíz del proyecto
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    reports_dir = os.path.join(project_root, 'reports')
+    os.makedirs(reports_dir, exist_ok=True)
+    filepath = os.path.join(reports_dir, filename)
+    
+    # Generar PDF
+    pdf = ArqueoCajaPDF(filepath, caja, ventas, formas_pago, config)
+    pdf.generar()
+    
+    # Enviar archivo
+    return send_file(filepath, as_attachment=True, download_name=filename, mimetype='application/pdf')
 
 @bp.route('/ventas')
 @login_required
@@ -147,6 +214,14 @@ def listar_ventas():
 def ventas_pendientes():
     """Listar ventas pendientes (estado == 'pendiente') para que la cajera las procese"""
     ventas = Venta.query.filter_by(estado='pendiente').order_by(Venta.fecha.desc()).all()
+    
+    # Debug: verificar cuántas ventas hay y sus estados
+    total_ventas = Venta.query.count()
+    ventas_por_estado = db.session.query(Venta.estado, db.func.count(Venta.id)).group_by(Venta.estado).all()
+    current_app.logger.debug(f"[ventas_pendientes] Total ventas en BD: {total_ventas}")
+    current_app.logger.debug(f"[ventas_pendientes] Ventas por estado: {ventas_por_estado}")
+    current_app.logger.debug(f"[ventas_pendientes] Ventas pendientes encontradas: {len(ventas)}")
+    
     return render_template('facturacion/ventas_pendientes.html', ventas=ventas)
 
 @bp.route('/ventas/nueva', methods=['GET', 'POST'])
@@ -220,8 +295,10 @@ def nueva_venta_desde_consulta(consulta_id):
     
     # Calcular totales
     subtotal = precio_consulta + total_procedimientos + total_insumos
-    iva = subtotal * 0.10  # IVA 10% Paraguay
-    total = subtotal + iva
+    # IVA incluido (Paraguay): el total es la suma de precios, IVA = total/11
+    total = subtotal
+    iva = total / 11
+    subtotal = total - iva  # Gravadas (base imponible)
     
     # Obtener formas de pago disponibles
     formas_pago = FormaPago.query.filter_by(activo=True).all()
@@ -312,14 +389,10 @@ def procesar_factura(consulta_id):
         total_insumos = sum(float(i.subtotal) for i in insumos)
         
         subtotal = precio_consulta + total_procedimientos + total_insumos
-        iva = subtotal * 0.10
-        total = subtotal + iva
-        
-        # Verificar que el pago cubra el total
-        total_pagado = monto_efectivo + monto_debito + monto_credito
-        if total_pagado < total:
-            flash('El monto recibido no cubre el total de la factura', 'error')
-            return redirect(url_for('facturacion.nueva_venta_desde_consulta', consulta_id=consulta_id))
+        # IVA incluido (Paraguay): el total es la suma de precios, IVA = total/11
+        total = subtotal
+        iva = total / 11
+        subtotal = total - iva  # Gravadas (base imponible)
         
         # Generar número de factura
         config = ConfiguracionConsultorio.get_configuracion()
@@ -468,6 +541,14 @@ def procesar_factura(consulta_id):
                     })
 
         # Now persist each pago in pagos_list
+        # Primero calcular el total pagado y validar
+        total_pagado = sum(float(p.get('monto', 0)) for p in pagos_list)
+        
+        if total_pagado < total:
+            flash('El monto recibido no cubre el total de la factura', 'error')
+            return redirect(url_for('facturacion.nueva_venta_desde_consulta', consulta_id=consulta_id))
+        
+        # Ahora sí persistir los pagos
         for pago_item in pagos_list:
             try:
                 forma_id = int(pago_item.get('forma_pago_id')) if pago_item.get('forma_pago_id') else None
@@ -519,7 +600,13 @@ def procesar_factura(consulta_id):
                 print(f"[procesar_factura] Error reading venta after commit: {e_read}")
 
             flash(f'Factura #{numero_factura} generada exitosamente', 'success')
-            return redirect(url_for('facturacion.ver_factura', id=venta.id))
+            # Retornar JSON con el ID de la venta para descarga automática del ticket
+            return jsonify({
+                'success': True,
+                'venta_id': venta.id,
+                'numero_factura': numero_factura,
+                'message': 'Factura generada exitosamente'
+            }), 200
         except Exception as e_commit:
             # Log commit exception with traceback and print so it's visible in console
             try:
@@ -599,19 +686,118 @@ ver_factura = ver_venta
 @bp.route('/reportes/ventas')
 @login_required
 def reporte_ventas():
-    """Reporte de ventas"""
+    """Reporte de ventas con listado de arqueos de cajas cerradas"""
     fecha_desde = request.args.get('desde', date.today().isoformat())
     fecha_hasta = request.args.get('hasta', date.today().isoformat())
     
+    # Convertir fechas
+    fecha_desde_dt = datetime.strptime(fecha_desde, '%Y-%m-%d')
+    fecha_hasta_dt = datetime.strptime(fecha_hasta, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+    
+    # Consultar ventas
     ventas = Venta.query.filter(
-        Venta.fecha >= datetime.strptime(fecha_desde, '%Y-%m-%d'),
-        Venta.fecha <= datetime.strptime(fecha_hasta, '%Y-%m-%d').replace(hour=23, minute=59)
+        Venta.fecha >= fecha_desde_dt,
+        Venta.fecha <= fecha_hasta_dt
     ).all()
+    
+    # Consultar cajas cerradas en el rango de fechas
+    cajas_cerradas = Caja.query.filter(
+        Caja.estado == 'cerrada',
+        Caja.fecha_cierre >= fecha_desde_dt,
+        Caja.fecha_cierre <= fecha_hasta_dt
+    ).order_by(Caja.fecha_cierre.desc()).all()
     
     total_vendido = sum(float(v.total) for v in ventas if v.estado == 'pagada')
     
     return render_template('facturacion/reporte_ventas.html',
                          ventas=ventas,
+                         cajas_cerradas=cajas_cerradas,
                          total_vendido=total_vendido,
                          fecha_desde=fecha_desde,
                          fecha_hasta=fecha_hasta)
+
+
+@bp.route('/ventas/<int:id>/ticket')
+@login_required
+def descargar_ticket(id):
+    """Generar y descargar ticket térmico en PDF"""
+    print(f"\n{'='*60}")
+    print(f"[TICKET] Iniciando generación de ticket para venta ID: {id}")
+    print(f"{'='*60}")
+    
+    try:
+        venta = Venta.query.get_or_404(id)
+        print(f"[TICKET] Venta encontrada: {venta.numero_factura}")
+        print(f"[TICKET] Estado: {venta.estado}")
+        print(f"[TICKET] Total: {venta.total}")
+        print(f"[TICKET] Detalles: {len(venta.detalles)} items")
+        print(f"[TICKET] Pagos: {len(venta.pagos)} formas de pago")
+        
+        config = ConfiguracionConsultorio.get_configuracion()
+        print(f"[TICKET] Configuración obtenida: {config.nombre}")
+        print(f"[TICKET] RUC: {config.ruc}")
+        print(f"[TICKET] Timbrado: {config.timbrado}")
+        print(f"[TICKET] Logo path: {config.logo_path}")
+        
+        # Crear buffer para el PDF
+        buffer = io.BytesIO()
+        print(f"[TICKET] Buffer creado")
+        
+        # Generar ticket
+        print(f"[TICKET] Llamando a generar_ticket_pdf...")
+        generar_ticket_pdf(venta, config, buffer)
+        print(f"[TICKET] Ticket generado exitosamente!")
+        
+        # Verificar tamaño del buffer (debería estar en posición 0 después de seek)
+        buffer_size = len(buffer.getvalue())
+        print(f"[TICKET] Tamaño del buffer: {buffer_size} bytes")
+        
+        if buffer_size == 0:
+            raise Exception("El buffer está vacío, no se generó el PDF correctamente")
+        
+        # Nombre del archivo
+        filename = f'Ticket_{venta.numero_factura.replace("/", "-")}.pdf' if venta.numero_factura else f'Ticket_{id}.pdf'
+        print(f"[TICKET] Nombre del archivo: {filename}")
+        
+        print(f"[TICKET] Enviando archivo al cliente como descarga...")
+        print(f"{'='*60}\n")
+        
+        # Enviar como descarga automática
+        response = send_file(
+            buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+        # Headers para forzar descarga y evitar caché
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        print(f'[TICKET] PDF enviado como descarga: {filename}')
+        return response
+        return response
+    except Exception as e:
+        print(f"\n{'!'*60}")
+        print(f"[TICKET ERROR] Error generando ticket: {str(e)}")
+        print(f"[TICKET ERROR] Tipo: {type(e).__name__}")
+        import traceback
+        print(f"[TICKET ERROR] Traceback:")
+        traceback.print_exc()
+        print(f"{'!'*60}\n")
+        flash(f'Error al generar ticket: {str(e)}', 'error')
+        return redirect(url_for('facturacion.ver_venta', id=id))
+
+
+@bp.route('/ventas/<int:id>/confirmar_descarga')
+@login_required
+def confirmar_y_descargar(id):
+    """Página intermedia que descarga el ticket automáticamente y redirige"""
+    print(f"\n{'='*60}")
+    print(f"[CONFIRMAR] Página de confirmación para venta ID: {id}")
+    print(f"[CONFIRMAR] Renderizando confirmar_descarga.html")
+    print(f"{'='*60}\n")
+    
+    venta = Venta.query.get_or_404(id)
+    return render_template('facturacion/confirmar_descarga.html', venta=venta)

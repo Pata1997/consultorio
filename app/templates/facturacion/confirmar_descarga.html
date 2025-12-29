@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Factura Confirmada{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body text-center py-5">
+                    <div class="mb-4">
+                        <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+                    </div>
+                    
+                    <h3 class="mb-3">¡Factura Confirmada!</h3>
+                    <p class="text-muted mb-4">
+                        Factura <strong>{{ venta.numero_factura }}</strong> generada exitosamente.
+                    </p>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-receipt"></i> 
+                        El ticket se abrirá en una nueva pestaña...
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="{{ url_for('facturacion.descargar_ticket', id=venta.id) }}" target="_blank" class="btn btn-primary mb-2">
+                            <i class="fas fa-receipt"></i> Ver Ticket Nuevamente
+                        </a>
+                        <br>
+                        <a href="{{ url_for('facturacion.ver_venta', id=venta.id) }}" class="btn btn-outline-secondary mb-2">
+                            <i class="fas fa-eye"></i> Ver Detalle de Factura
+                        </a>
+                        <br>
+                        <a href="{{ url_for('facturacion.ventas_pendientes') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-list"></i> Volver a Ventas Pendientes
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Abrir ticket en nueva pestaña automáticamente
+window.onload = function() {
+    console.log('[TICKET] Abriendo ticket en nueva pestaña...');
+    var ticketUrl = '{{ url_for("facturacion.descargar_ticket", id=venta.id) }}';
+    window.open(ticketUrl, '_blank');
+    console.log('[TICKET] Ticket abierto');
+};
+</script>
+{% endblock %}

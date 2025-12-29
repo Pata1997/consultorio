@@ -350,14 +350,36 @@ function cargarMedicos() {
     
     fetch(`/agendamiento/api/medicos-por-especialidad/${espId}?fecha=${fecha}`)
         .then(response => response.json())
-        .then(medicos => {
+        .then(data => {
             medicoSelect.innerHTML = '<option value="">Seleccionar médico...</option>';
-            medicos.forEach(medico => {
-                const option = document.createElement('option');
-                option.value = medico.id;
-                option.textContent = medico.nombre;
-                medicoSelect.appendChild(option);
-            });
+            
+            // Agregar médicos disponibles
+            if (data.disponibles && data.disponibles.length > 0) {
+                const optgroupDisponibles = document.createElement('optgroup');
+                optgroupDisponibles.label = 'Disponibles';
+                data.disponibles.forEach(medico => {
+                    const option = document.createElement('option');
+                    option.value = medico.id;
+                    option.textContent = medico.nombre;
+                    optgroupDisponibles.appendChild(option);
+                });
+                medicoSelect.appendChild(optgroupDisponibles);
+            }
+            
+            // Agregar médicos no disponibles (deshabilitados con motivo)
+            if (data.no_disponibles && data.no_disponibles.length > 0) {
+                const optgroupNoDisponibles = document.createElement('optgroup');
+                optgroupNoDisponibles.label = 'No disponibles';
+                data.no_disponibles.forEach(medico => {
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.disabled = true;
+                    option.textContent = `${medico.nombre} (${medico.motivo_no_disponible})`;
+                    optgroupNoDisponibles.appendChild(option);
+                });
+                medicoSelect.appendChild(optgroupNoDisponibles);
+            }
+            
             medicoSelect.disabled = false;
         });
 }

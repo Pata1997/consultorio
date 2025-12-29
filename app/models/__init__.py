@@ -6,7 +6,7 @@ from app.models.consultorio import (
 )
 from app.models.consultorio import ProcedimientoPrecio
 from app.models.facturacion import (
-    Caja, Venta, VentaDetalle, FormaPago, Pago, NotaCredito, NotaDebito
+    Caja, Venta, VentaDetalle, FormaPago, Pago
 )
 from app.models.rrhh import Vacacion, Permiso, Asistencia
 from app.models.configuracion import ConfiguracionConsultorio
@@ -16,6 +16,6 @@ __all__ = [
     'Cita', 'Consulta', 'Receta', 'OrdenEstudio', 'Insumo', 'InsumoEspecialidad',
     'ConsultaInsumo', 'MovimientoInsumo', 'Procedimiento', 'ConsultaProcedimiento',
     'ProcedimientoPrecio',
-    'Caja', 'Venta', 'VentaDetalle', 'FormaPago', 'Pago', 'NotaCredito', 'NotaDebito',
+    'Caja', 'Venta', 'VentaDetalle', 'FormaPago', 'Pago',
     'Vacacion', 'Permiso', 'Asistencia', 'ConfiguracionConsultorio'
 ]

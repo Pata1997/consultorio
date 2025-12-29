@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from app import db
 from app.models import Cita, Paciente, Medico, Especialidad, MedicoEspecialidad, HorarioAtencion, Vacacion, Permiso
+from app.utils.rrhh_utils import medico_disponible_en_fecha
 from datetime import datetime, date, time, timedelta
 from sqlalchemy import and_, or_, func
 
@@ -169,6 +170,17 @@ def nueva_cita():
         # Validar que la fecha no sea pasada
         if fecha < date.today():
             flash('No se pueden agendar citas en fechas pasadas', 'danger')
+            return redirect(url_for('agendamiento.nueva_cita'))
+        
+        # Verificar disponibilidad del médico (vacaciones/permisos)
+        # Calcular hora_fin (asumiendo citas de 30 minutos)
+        hora_fin = (datetime.combine(fecha, hora) + timedelta(minutes=30)).time()
+        disponible, motivo_no_disponible = medico_disponible_en_fecha(
+            medico_id, fecha, hora, hora_fin
+        )
+        
+        if not disponible:
+            flash(f'No se puede agendar: {motivo_no_disponible}', 'danger')
             return redirect(url_for('agendamiento.nueva_cita'))
         
         # Verificar disponibilidad
@@ -482,6 +494,8 @@ def medicos_por_especialidad(especialidad_id):
     ).all()
     
     medicos_disponibles = []
+    medicos_no_disponibles = []
+    
     for me in medicos_especialidad:
         medico = me.medico
         
@@ -489,26 +503,27 @@ def medicos_por_especialidad(especialidad_id):
         if not medico.activo:
             continue
         
-        # Verificar que no esté de vacaciones
-        vacacion = Vacacion.query.filter(
-            and_(
-                Vacacion.medico_id == medico.id,
-                Vacacion.fecha_inicio <= fecha_consulta,
-                Vacacion.fecha_fin >= fecha_consulta,
-                Vacacion.estado == 'aprobada'
-            )
-        ).first()
+        # Verificar disponibilidad (vacaciones/permisos) - sin horario específico
+        disponible, motivo = medico_disponible_en_fecha(
+            medico.id, fecha_consulta, None, None
+        )
         
-        if vacacion:
-            continue
-        
-        medicos_disponibles.append({
+        medico_info = {
             'id': medico.id,
             'nombre': medico.nombre_completo,
             'registro': medico.registro_profesional
-        })
+        }
+        
+        if disponible:
+            medicos_disponibles.append(medico_info)
+        else:
+            medico_info['motivo_no_disponible'] = motivo
+            medicos_no_disponibles.append(medico_info)
     
-    return jsonify(medicos_disponibles)
+    return jsonify({
+        'disponibles': medicos_disponibles,
+        'no_disponibles': medicos_no_disponibles
+    })
 
 @bp.route('/api/horarios-disponibles/<int:medico_id>')
 @login_required

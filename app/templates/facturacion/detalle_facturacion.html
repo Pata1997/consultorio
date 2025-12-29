@@ -109,18 +109,18 @@
                                     {% endfor %}
                                 {% endif %}
 
-                                <!-- Totales -->
-                                <tr class="table-light">
-                                    <td colspan="3" class="text-end"><strong>Subtotal (Gravadas 10%):</strong></td>
-                                    <td class="text-end"><strong>{{ subtotal|format_currency }} Gs.</strong></td>
-                                </tr>
-                                <tr class="table-light">
-                                    <td colspan="3" class="text-end"><strong>IVA 10%:</strong></td>
-                                    <td class="text-end"><strong>{{ iva|format_currency }} Gs.</strong></td>
-                                </tr>
+                                <!-- Totales (IVA Incluido - Paraguay) -->
                                 <tr class="table-primary">
                                     <td colspan="3" class="text-end"><h5 class="mb-0"><strong>TOTAL:</strong></h5></td>
                                     <td class="text-end"><h5 class="mb-0"><strong>{{ total|format_currency }} Gs.</strong></h5></td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td colspan="3" class="text-end"><small><strong>Gravadas 10%:</strong></small></td>
+                                    <td class="text-end"><small><strong>{{ subtotal|format_currency }} Gs.</strong></small></td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td colspan="3" class="text-end"><small><strong>IVA 10%:</strong></small></td>
+                                    <td class="text-end"><small><strong>{{ iva|format_currency }} Gs.</strong></small></td>
                                 </tr>
                             </tbody>
                         </table>
@@ -577,6 +577,20 @@
             }
 
             // Al llegar aquí, asumimos que el servidor procesó la factura correctamente.
+            const respJson = await resp.json();
+            const ventaId = respJson.venta_id;
+            
+            console.log('[FACTURA] Factura procesada exitosamente. Venta ID:', ventaId);
+            
+            // Descargar ticket automáticamente usando iframe oculto
+            console.log('[FACTURA] Iniciando descarga automática del ticket...');
+            const ticketUrl = `/facturacion/ventas/${ventaId}/ticket`;
+            const downloadFrame = document.createElement('iframe');
+            downloadFrame.style.display = 'none';
+            downloadFrame.src = ticketUrl;
+            document.body.appendChild(downloadFrame);
+            console.log('[FACTURA] Ticket descargándose desde:', ticketUrl);
+            
             // Mostrar modal con el vuelto calculado en cliente
             const totalRecibido = pagos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
             const vuelto = Math.max(0, Math.round(totalRecibido - totalFactura));

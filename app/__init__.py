@@ -29,6 +29,7 @@ def create_app(config_name='default'):
     
     # Registrar blueprints
     from app.routes import auth, main, agendamiento, consultorio, facturacion, rrhh, configuracion
+    from app.routes import usuarios
     
     app.register_blueprint(auth.bp)
     app.register_blueprint(main.bp)
@@ -37,6 +38,7 @@ def create_app(config_name='default'):
     app.register_blueprint(facturacion.bp)
     app.register_blueprint(rrhh.bp)
     app.register_blueprint(configuracion.bp)
+    app.register_blueprint(usuarios.bp)
     
     # Context processor para menú dinámico
     @app.context_processor

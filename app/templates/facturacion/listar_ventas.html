@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Ventas - Facturación{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12 d-flex justify-content-between align-items-center">
+    <h2><i class="bi bi-receipt"></i> Ventas</h2>
+    <form class="d-flex" method="GET" action="{{ url_for('facturacion.listar_ventas') }}">
+      <div class="input-group">
+        <span class="input-group-text"><i class="bi bi-calendar-date"></i></span>
+        <input type="date" class="form-control" name="fecha" value="{{ fecha_filtro }}">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-filter"></i> Filtrar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-list-ul"></i> Ventas del {{ fecha_filtro|default('-', true) }}</h5>
+      </div>
+      <div class="card-body">
+        {% if ventas %}
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>N° Factura</th>
+                <th>Fecha/Hora</th>
+                <th>Paciente</th>
+                <th>RUC/CI</th>
+                <th class="text-end">Subtotal</th>
+                <th class="text-end">IVA</th>
+                <th class="text-end">Total</th>
+                <th class="text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in ventas %}
+              <tr>
+                <td><strong>{{ v.numero_factura }}</strong></td>
+                <td>{{ v.fecha.strftime('%d/%m/%Y %H:%M') }}</td>
+                <td>{{ v.nombre_factura }}</td>
+                <td>{{ v.ruc_factura or 'N/A' }}</td>
+                <td class="text-end">{{ v.subtotal|format_currency }}</td>
+                <td class="text-end">{{ v.iva|format_currency }}</td>
+                <td class="text-end"><strong>{{ v.total|format_currency }} Gs</strong></td>
+                <td class="text-center">
+                  <div class="btn-group" role="group">
+                    <a href="{{ url_for('facturacion.descargar_ticket', id=v.id) }}" class="btn btn-sm btn-outline-primary" target="_blank" title="Descargar Ticket">
+                      <i class="bi bi-file-earmark-pdf"></i>
+                    </a>
+                    <a href="{{ url_for('facturacion.ver_venta', id=v.id) }}" class="btn btn-sm btn-outline-secondary" title="Ver Detalle">
+                      <i class="bi bi-eye"></i>
+                    </a>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center mb-0">No se encontraron ventas para la fecha seleccionada.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

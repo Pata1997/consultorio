@@ -47,7 +47,6 @@ class Paciente(db.Model):
     direccion = db.Column(db.Text)
     direccion_facturacion = db.Column(db.Text)  # Dirección para facturación
     ciudad = db.Column(db.String(100))
-    direccion_facturacion = db.Column(db.Text)  # Dirección para facturas
     alergias = db.Column(db.Text)
     tipo_sangre = db.Column(db.String(5))
     fecha_registro = db.Column(db.DateTime, default=datetime.utcnow)
@@ -115,8 +114,8 @@ class Medico(db.Model):
     horarios = db.relationship('HorarioAtencion', backref='medico', lazy=True)
     citas = db.relationship('Cita', backref='medico', lazy=True)
     consultas = db.relationship('Consulta', backref='medico', lazy=True)
-    vacaciones = db.relationship('Vacacion', backref='medico', lazy=True)
-    permisos = db.relationship('Permiso', backref='medico', lazy=True)
+    # Nota: Vacaciones/Permisos/Asistencias ahora están ligados a Usuario (usuario_id)
+    # y no directamente a Medico. Acceder vía usuario.vacaciones / usuario.permisos.
     
     @property
     def nombre_completo(self):

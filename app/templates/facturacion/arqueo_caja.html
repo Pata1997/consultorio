@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Arqueo de Caja{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="bi bi-file-text"></i> Arqueo de Caja</h2>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-calculator"></i> Resumen del Arqueo</h5>
+            </div>
+            <div class="card-body">
+                <!-- Información de la Caja -->
+                <div class="mb-4">
+                    <h6 class="text-muted">Información de la Sesión</h6>
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <td><strong>Cajero:</strong></td>
+                            <td>{{ caja.usuario_apertura.username }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Apertura:</strong></td>
+                            <td>{{ caja.fecha_apertura.strftime('%d/%m/%Y %H:%M') }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Cierre:</strong></td>
+                            <td>{{ caja.fecha_cierre.strftime('%d/%m/%Y %H:%M') if caja.fecha_cierre else 'Abierta' }}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <hr>
+
+                <!-- Resumen de Movimientos -->
+                <div class="mb-4">
+                    <h6 class="text-muted">Resumen de Movimientos</h6>
+                    <table class="table">
+                        <tbody>
+                            <tr>
+                                <th>Saldo Inicial</th>
+                                <td class="text-end"><strong>{{ caja.monto_inicial|format_currency }} Gs</strong></td>
+                            </tr>
+                            <tr class="table-success">
+                                <th>+ Ingresos (Ventas)</th>
+                                <td class="text-end"><strong class="text-success">{{ total_esperado|format_currency }} Gs</strong></td>
+                            </tr>
+                            <tr class="table-warning">
+                                <th>- Egresos</th>
+                                <td class="text-end"><strong>0 Gs</strong></td>
+                            </tr>
+                            <tr class="table-primary">
+                                <th><strong>Saldo Teórico (Esperado)</strong></th>
+                                <td class="text-end"><h5 class="mb-0 text-primary">{{ (caja.monto_inicial + total_esperado)|format_currency }} Gs</h5></td>
+                            </tr>
+                            <tr class="table-light">
+                                <th>Efectivo Contado</th>
+                                <td class="text-end"><strong>{{ caja.monto_final|format_currency }} Gs</strong></td>
+                            </tr>
+                            <tr class="border-top {% if diferencia != 0 %}table-danger{% else %}table-success{% endif %}">
+                                <th><strong>Diferencia</strong></th>
+                                <td class="text-end">
+                                    <h5 class="mb-0 {% if diferencia != 0 %}text-danger{% else %}text-success{% endif %}">
+                                        {{ diferencia|format_currency }} Gs
+                                        {% if diferencia == 0 %}
+                                            <i class="bi bi-check-circle-fill"></i>
+                                        {% else %}
+                                            <i class="bi bi-exclamation-triangle-fill"></i>
+                                        {% endif %}
+                                    </h5>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    {% if diferencia != 0 %}
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <strong>¡Atención!</strong> Hay una diferencia de {{ diferencia|format_currency }} Gs en el arqueo.
+                        Esta diferencia debe ser aclarada y documentada.
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <strong>¡Caja cuadrada!</strong> El efectivo contado coincide con el saldo teórico.
+                    </div>
+                    {% endif %}
+                </div>
+
+                <hr>
+
+                <!-- Detalle por Forma de Pago -->
+                {% if formas_pago %}
+                <div class="mb-4">
+                    <h6 class="text-muted">Detalle por Forma de Pago</h6>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Forma de Pago</th>
+                                <th class="text-end">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for forma, total in formas_pago %}
+                            <tr>
+                                <td>{{ forma }}</td>
+                                <td class="text-end">{{ total|format_currency }} Gs</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                <hr>
+
+                <!-- Resumen de Ventas -->
+                <div class="mb-4">
+                    <h6 class="text-muted">Ventas de la Sesión</h6>
+                    <p class="mb-2">
+                        <strong>Total de ventas:</strong> {{ ventas|length }}<br>
+                        <strong>Ventas pagadas:</strong> {{ ventas|selectattr('estado', 'equalto', 'pagada')|list|length }}
+                    </p>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('facturacion.descargar_arqueo_pdf', id=caja.id) }}" 
+                       class="btn btn-primary btn-lg" target="_blank">
+                        <i class="bi bi-file-pdf"></i> Descargar PDF del Arqueo
+                    </a>
+                    <a href="{{ url_for('facturacion.estado_caja') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Volver a Estado de Caja
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Vacaciones - RRHH{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12 d-flex justify-content-between align-items-center">
+    <h2><i class="bi bi-calendar-x"></i> Solicitudes de Vacaciones</h2>
+    {% if current_user.rol == 'medico' %}
+    <a href="{{ url_for('rrhh.solicitar_vacacion') }}" class="btn btn-primary">
+      <i class="bi bi-plus-circle"></i> Nueva Solicitud
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-list-ul"></i> Listado de Vacaciones</h5>
+      </div>
+      <div class="card-body">
+        {% if vacaciones %}
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Fecha Inicio</th>
+                <th>Fecha Fin</th>
+                <th class="text-center">Días</th>
+                <th>Tipo</th>
+                <th>Estado</th>
+                <th>Fecha Solicitud</th>
+                {% if current_user.rol == 'admin' %}
+                <th class="text-center">Acciones</th>
+                {% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in vacaciones %}
+              <tr>
+                <td>
+                  {% if v.usuario and v.usuario.medico %}
+                    {{ v.usuario.medico.nombre_completo }}
+                  {% elif v.usuario %}
+                    {{ v.usuario.username }} <span class="badge bg-secondary">{{ v.usuario.rol|title }}</span>
+                  {% else %}
+                    Usuario ID: {{ v.usuario_id }}
+                  {% endif %}
+                </td>
+                <td>{{ v.fecha_inicio.strftime('%d/%m/%Y') }}</td>
+                <td>{{ v.fecha_fin.strftime('%d/%m/%Y') }}</td>
+                <td class="text-center"><strong>{{ v.dias_solicitados }}</strong></td>
+                <td>
+                  <span class="badge bg-{% if v.tipo == 'anual' %}info{% else %}secondary{% endif %}">
+                    {{ v.tipo|title }}
+                  </span>
+                </td>
+                <td>
+                  {% if v.estado == 'pendiente' %}
+                    <span class="badge bg-warning text-dark">Pendiente</span>
+                  {% elif v.estado == 'aprobada' %}
+                    <span class="badge bg-success">Aprobada</span>
+                  {% elif v.estado == 'rechazada' %}
+                    <span class="badge bg-danger">Rechazada</span>
+                  {% endif %}
+                </td>
+                <td>{{ v.fecha_solicitud.strftime('%d/%m/%Y %H:%M') }}</td>
+                {% if current_user.rol == 'admin' %}
+                <td class="text-center">
+                  {% if v.estado == 'pendiente' %}
+                  <div class="btn-group" role="group">
+                    <form method="POST" action="{{ url_for('rrhh.aprobar_vacacion', id=v.id) }}" style="display:inline;">
+                      <button type="submit" class="btn btn-sm btn-success" title="Aprobar">
+                        <i class="bi bi-check-circle"></i>
+                      </button>
+                    </form>
+                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#modalRechazar{{ v.id }}" title="Rechazar">
+                      <i class="bi bi-x-circle"></i>
+                    </button>
+                  </div>
+                  
+                  <!-- Modal Rechazar -->
+                  <div class="modal fade" id="modalRechazar{{ v.id }}" tabindex="-1">
+                    <div class="modal-dialog">
+                      <div class="modal-content">
+                        <div class="modal-header bg-danger text-white">
+                          <h5 class="modal-title">Rechazar Vacación</h5>
+                          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <form method="POST" action="{{ url_for('rrhh.rechazar_vacacion', id=v.id) }}">
+                          <div class="modal-body">
+                            <p><strong>Médico:</strong> {{ v.medico.nombre_completo if v.medico else 'N/A' }}</p>
+                            <p><strong>Período:</strong> {{ v.fecha_inicio.strftime('%d/%m/%Y') }} - {{ v.fecha_fin.strftime('%d/%m/%Y') }}</p>
+                            <div class="mb-3">
+                              <label for="motivo{{ v.id }}" class="form-label">Motivo del rechazo:</label>
+                              <textarea class="form-control" id="motivo{{ v.id }}" name="motivo" rows="3" required></textarea>
+                            </div>
+                          </div>
+                          <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-danger">Rechazar</button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                {% endif %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center mb-0">No hay solicitudes de vacaciones registradas.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

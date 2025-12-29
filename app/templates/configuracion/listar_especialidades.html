@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Especialidades y Precios de Consulta{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>💰 Gestión de Especialidades y Precios de Consulta</h2>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-list-ul"></i> Especialidades Registradas
+            </h5>
+            <a href="{{ url_for('configuracion.crear_especialidad') }}" class="btn btn-light btn-sm">
+                <i class="bi bi-plus-circle"></i> Crear Nueva Especialidad
+            </a>
+        </div>
+        <div class="card-body">
+            {% if especialidades %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Especialidad</th>
+                                <th>Descripción</th>
+                                <th class="text-end">Precio Consulta</th>
+                                <th class="text-center">Estado</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for esp in especialidades %}
+                            <tr>
+                                <td><strong>{{ esp.id }}</strong></td>
+                                <td>
+                                    <strong>{{ esp.nombre }}</strong>
+                                    {% if not esp.activo %}
+                                        <span class="badge bg-secondary ms-2">Inactivo</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ esp.descripcion or '-' }}</td>
+                                <td class="text-end">
+                                    <strong class="text-success">{{ "{:,.0f}".format(esp.precio_consulta) }} Gs.</strong>
+                                </td>
+                                <td class="text-center">
+                                    {% if esp.activo %}
+                                        <span class="badge bg-success">Activo</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Inactivo</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <a href="{{ url_for('configuracion.editar_especialidad', id=esp.id) }}" 
+                                       class="btn btn-sm btn-primary">
+                                        <i class="bi bi-pencil"></i> Editar
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    No hay especialidades registradas.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="alert alert-info mt-4">
+        <h6><i class="bi bi-info-circle"></i> Información Importante</h6>
+        <ul class="mb-0">
+            <li><strong>Precio de Consulta:</strong> Es el precio que se cobra por la consulta de cada especialidad.</li>
+            <li><strong>IVA Incluido:</strong> Los precios ya incluyen el IVA del 10%. El paciente paga exactamente el precio mostrado.</li>
+            <li><strong>Estado Activo:</strong> Solo las especialidades activas aparecen disponibles al agendar citas.</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

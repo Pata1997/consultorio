@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app import db
-from app.models import ConfiguracionConsultorio
+from app.models import ConfiguracionConsultorio, Especialidad
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
@@ -84,3 +84,75 @@ def editar_configuracion():
         return redirect(url_for('configuracion.ver_configuracion'))
     
     return render_template('configuracion/editar_configuracion.html', config=config)
+
+@bp.route('/especialidades')
+@login_required
+def listar_especialidades():
+    """Listar especialidades para gestionar precios"""
+    if current_user.rol not in ['admin']:
+        flash('No tienes permisos para acceder a esta sección', 'danger')
+        return redirect(url_for('main.index'))
+    
+    especialidades = Especialidad.query.all()
+    return render_template('configuracion/listar_especialidades.html', especialidades=especialidades)
+
+@bp.route('/especialidades/crear', methods=['GET', 'POST'])
+@login_required
+def crear_especialidad():
+    """Crear nueva especialidad"""
+    if current_user.rol not in ['admin']:
+        flash('No tienes permisos para acceder a esta sección', 'danger')
+        return redirect(url_for('main.index'))
+    
+    if request.method == 'POST':
+        try:
+            from app.utils.number_utils import parse_decimal_from_form
+            
+            # Crear nueva especialidad
+            nueva_especialidad = Especialidad(
+                nombre=request.form.get('nombre'),
+                descripcion=request.form.get('descripcion'),
+                precio_consulta=parse_decimal_from_form(request.form.get('precio_consulta')),
+                activo=request.form.get('activo') == 'on'
+            )
+            
+            db.session.add(nueva_especialidad)
+            db.session.commit()
+            flash('Especialidad creada exitosamente', 'success')
+            return redirect(url_for('configuracion.listar_especialidades'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al crear especialidad: {str(e)}', 'danger')
+    
+    return render_template('configuracion/crear_especialidad.html')
+
+@bp.route('/especialidades/<int:id>/editar', methods=['GET', 'POST'])
+@login_required
+def editar_especialidad(id):
+    """Editar precio de especialidad"""
+    if current_user.rol not in ['admin']:
+        flash('No tienes permisos para acceder a esta sección', 'danger')
+        return redirect(url_for('main.index'))
+    
+    especialidad = Especialidad.query.get_or_404(id)
+    
+    if request.method == 'POST':
+        try:
+            from app.utils.number_utils import parse_decimal_from_form
+            
+            # Actualizar datos
+            especialidad.nombre = request.form.get('nombre')
+            especialidad.descripcion = request.form.get('descripcion')
+            especialidad.precio_consulta = parse_decimal_from_form(request.form.get('precio_consulta'))
+            especialidad.activo = request.form.get('activo') == 'on'
+            
+            db.session.commit()
+            flash('Especialidad actualizada exitosamente', 'success')
+            return redirect(url_for('configuracion.listar_especialidades'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al actualizar especialidad: {str(e)}', 'danger')
+    
+    return render_template('configuracion/editar_especialidad.html', especialidad=especialidad)

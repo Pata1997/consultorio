@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Solicitar Permiso{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2><i class="bi bi-clock"></i> Solicitar Permiso</h2>
+      <a href="{{ url_for('rrhh.listar_permisos') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Volver
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-8 offset-md-2">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> Nueva Solicitud de Permiso</h5>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('rrhh.solicitar_permiso') }}" id="formPermiso">
+          <div class="mb-3">
+            <label for="fecha" class="form-label">Fecha *</label>
+            <input type="date" class="form-control" id="fecha" name="fecha" required>
+          </div>
+          
+          <div class="mb-3">
+            <label for="tipo" class="form-label">Tipo de Permiso *</label>
+            <select class="form-select" id="tipo" name="tipo" required>
+              <option value="">Seleccione...</option>
+              <option value="medico">Médico</option>
+              <option value="personal">Personal</option>
+              <option value="familiar">Familiar</option>
+              <option value="enfermedad">Enfermedad</option>
+            </select>
+          </div>
+          
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="todoElDia" onchange="toggleHorario()">
+            <label class="form-check-label" for="todoElDia">
+              <strong>Permiso todo el día</strong>
+            </label>
+            <br>
+            <small class="text-muted">Si no marca esta opción, debe especificar horario</small>
+          </div>
+          
+          <div id="horarioDiv" class="row">
+            <div class="col-md-6 mb-3">
+              <label for="hora_inicio" class="form-label">Hora Inicio</label>
+              <input type="time" class="form-control" id="hora_inicio" name="hora_inicio">
+              <small class="text-muted">Inicio del permiso</small>
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              <label for="hora_fin" class="form-label">Hora Fin</label>
+              <input type="time" class="form-control" id="hora_fin" name="hora_fin">
+              <small class="text-muted">Fin del permiso</small>
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            <label for="motivo" class="form-label">Motivo / Justificación *</label>
+            <textarea class="form-control" id="motivo" name="motivo" rows="4" required placeholder="Explique el motivo del permiso"></textarea>
+          </div>
+          
+          <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> 
+            <strong>Importante:</strong> La solicitud será enviada al administrador para su revisión. 
+            Si se aprueba, no podrá atender pacientes en el horario solicitado.
+          </div>
+          
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary btn-lg">
+              <i class="bi bi-send"></i> Enviar Solicitud
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleHorario() {
+  const todoElDia = document.getElementById('todoElDia').checked;
+  const horarioDiv = document.getElementById('horarioDiv');
+  const horaInicio = document.getElementById('hora_inicio');
+  const horaFin = document.getElementById('hora_fin');
+  
+  if (todoElDia) {
+    horarioDiv.style.display = 'none';
+    horaInicio.removeAttribute('required');
+    horaFin.removeAttribute('required');
+    horaInicio.value = '';
+    horaFin.value = '';
+  } else {
+    horarioDiv.style.display = 'flex';
+    horaInicio.setAttribute('required', 'required');
+    horaFin.setAttribute('required', 'required');
+  }
+}
+
+// Validación al enviar
+document.getElementById('formPermiso').addEventListener('submit', function(e) {
+  const todoElDia = document.getElementById('todoElDia').checked;
+  
+  if (!todoElDia) {
+    const horaInicio = document.getElementById('hora_inicio').value;
+    const horaFin = document.getElementById('hora_fin').value;
+    
+    if (!horaInicio || !horaFin) {
+      e.preventDefault();
+      alert('Debe especificar el horario o marcar "Permiso todo el día"');
+      return;
+    }
+    
+    if (horaInicio >= horaFin) {
+      e.preventDefault();
+      alert('La hora de fin debe ser posterior a la hora de inicio');
+      return;
+    }
+  }
+});
+
+// Inicializar estado
+toggleHorario();
+</script>
+{% endblock %}

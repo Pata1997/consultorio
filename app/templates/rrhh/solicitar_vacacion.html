@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Solicitar Vacaciones{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2><i class="bi bi-calendar-x"></i> Solicitar Vacaciones</h2>
+      <a href="{{ url_for('rrhh.listar_vacaciones') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Volver
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-8 offset-md-2">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> Nueva Solicitud</h5>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('rrhh.solicitar_vacacion') }}">
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="fecha_inicio" class="form-label">Fecha Inicio *</label>
+              <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" required>
+              <small class="text-muted">Primera fecha de vacaciones</small>
+            </div>
+            
+            <div class="col-md-6 mb-3">
+              <label for="fecha_fin" class="form-label">Fecha Fin *</label>
+              <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" required>
+              <small class="text-muted">Última fecha de vacaciones (inclusive)</small>
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            <label for="tipo" class="form-label">Tipo de Vacación *</label>
+            <select class="form-select" id="tipo" name="tipo" required>
+              <option value="anual" selected>Anual</option>
+              <option value="extraordinaria">Extraordinaria</option>
+            </select>
+          </div>
+          
+          <div class="mb-3">
+            <label for="motivo" class="form-label">Motivo / Observaciones</label>
+            <textarea class="form-control" id="motivo" name="motivo" rows="4" placeholder="Opcional: Detalles adicionales sobre la solicitud"></textarea>
+          </div>
+          
+          <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> 
+            <strong>Importante:</strong> La solicitud será enviada al administrador para su revisión y aprobación. 
+            Recibirá una notificación cuando sea procesada.
+          </div>
+          
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary btn-lg">
+              <i class="bi bi-send"></i> Enviar Solicitud
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Calcular días automáticamente
+document.getElementById('fecha_inicio').addEventListener('change', calcularDias);
+document.getElementById('fecha_fin').addEventListener('change', calcularDias);
+
+function calcularDias() {
+  const inicio = document.getElementById('fecha_inicio').value;
+  const fin = document.getElementById('fecha_fin').value;
+  
+  if (inicio && fin) {
+    const fechaInicio = new Date(inicio);
+    const fechaFin = new Date(fin);
+    const dias = Math.ceil((fechaFin - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
+    
+    if (dias > 0) {
+      console.log(`Días solicitados: ${dias}`);
+    }
+  }
+}
+
+// Validar que fecha fin sea mayor a fecha inicio
+document.querySelector('form').addEventListener('submit', function(e) {
+  const inicio = new Date(document.getElementById('fecha_inicio').value);
+  const fin = new Date(document.getElementById('fecha_fin').value);
+  
+  if (fin < inicio) {
+    e.preventDefault();
+    alert('La fecha de fin debe ser posterior a la fecha de inicio');
+  }
+});
+</script>
+{% endblock %}

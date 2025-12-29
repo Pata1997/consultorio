@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Asistencias - RRHH{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12 d-flex justify-content-between align-items-center">
+    <h2><i class="bi bi-people"></i> Asistencias</h2>
+    <form class="d-flex" method="GET" action="{{ url_for('rrhh.listar_asistencias') }}">
+      <div class="input-group">
+        <span class="input-group-text"><i class="bi bi-calendar-date"></i></span>
+        <input type="date" class="form-control" name="fecha" value="{{ fecha_filtro }}">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-filter"></i> Filtrar</button>
+      </div>
+    </form>
+    <div>
+      {% if current_user.rol != 'admin' %}
+        {% if not asistencia_hoy %}
+          <form method="POST" action="{{ url_for('rrhh.marcar_entrada') }}" style="display:inline;">
+            <button type="submit" class="btn btn-success"><i class="bi bi-box-arrow-in-right"></i> Marcar Entrada</button>
+          </form>
+        {% elif asistencia_hoy and not asistencia_hoy.hora_salida %}
+          <form method="POST" action="{{ url_for('rrhh.marcar_salida') }}" style="display:inline;">
+            <button type="submit" class="btn btn-warning"><i class="bi bi-box-arrow-right"></i> Marcar Salida</button>
+          </form>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-list-ul"></i> Asistencias del {{ fecha_filtro|default('-', true) }}</h5>
+      </div>
+      <div class="card-body">
+        {% if asistencias %}
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th class="text-center">Fecha</th>
+                <th class="text-center">Entrada</th>
+                <th class="text-center">Salida</th>
+                <th class="text-center">Estado</th>
+                <th>Observaciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in asistencias %}
+              <tr>
+                <td>
+                  {% if a.usuario and a.usuario.medico %}
+                    {{ a.usuario.medico.nombre_completo }}
+                  {% elif a.usuario %}
+                    {{ a.usuario.username }} <span class="badge bg-secondary">{{ a.usuario.rol|title }}</span>
+                  {% else %}
+                    Usuario ID: {{ a.usuario_id }}
+                  {% endif %}
+                </td>
+                <td class="text-center">{{ a.fecha.strftime('%d/%m/%Y') }}</td>
+                <td class="text-center">{{ a.hora_entrada.strftime('%H:%M') if a.hora_entrada else '-' }}</td>
+                <td class="text-center">{{ a.hora_salida.strftime('%H:%M') if a.hora_salida else '-' }}</td>
+                <td class="text-center">
+                  {% set badge = 'secondary' %}
+                  {% if a.estado == 'presente' %}{% set badge = 'success' %}{% endif %}
+                  {% if a.estado == 'tarde' %}{% set badge = 'warning' %}{% endif %}
+                  {% if a.estado == 'ausente' %}{% set badge = 'danger' %}{% endif %}
+                  <span class="badge bg-{{ badge }} text-uppercase">{{ a.estado }}</span>
+                </td>
+                <td>{{ a.observaciones or '' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center mb-0">No se registraron asistencias para la fecha seleccionada.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

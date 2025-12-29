@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Permisos - RRHH{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12 d-flex justify-content-between align-items-center">
+    <h2><i class="bi bi-clock"></i> Solicitudes de Permisos</h2>
+    {% if current_user.rol == 'medico' %}
+    <a href="{{ url_for('rrhh.solicitar_permiso') }}" class="btn btn-primary">
+      <i class="bi bi-plus-circle"></i> Nueva Solicitud
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-list-ul"></i> Listado de Permisos</h5>
+      </div>
+      <div class="card-body">
+        {% if permisos %}
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Fecha</th>
+                <th>Horario</th>
+                <th>Tipo</th>
+                <th>Motivo</th>
+                <th>Estado</th>
+                <th>Fecha Solicitud</th>
+                {% if current_user.rol == 'admin' %}
+                <th class="text-center">Acciones</th>
+                {% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in permisos %}
+              <tr>
+                <td>
+                  {% if p.usuario and p.usuario.medico %}
+                    {{ p.usuario.medico.nombre_completo }}
+                  {% elif p.usuario %}
+                    {{ p.usuario.username }} <span class="badge bg-secondary">{{ p.usuario.rol|title }}</span>
+                  {% else %}
+                    Usuario ID: {{ p.usuario_id }}
+                  {% endif %}
+                </td>
+                <td>{{ p.fecha.strftime('%d/%m/%Y') }}</td>
+                <td>
+                  {% if p.hora_inicio and p.hora_fin %}
+                    <span class="badge bg-info">{{ p.hora_inicio.strftime('%H:%M') }} - {{ p.hora_fin.strftime('%H:%M') }}</span>
+                  {% else %}
+                    <span class="badge bg-secondary">Todo el día</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="badge bg-{% if p.tipo == 'medico' %}primary{% elif p.tipo == 'personal' %}info{% elif p.tipo == 'familiar' %}warning{% else %}secondary{% endif %}">
+                    {{ p.tipo|title }}
+                  </span>
+                </td>
+                <td>
+                  <small>{{ p.motivo[:50] }}{% if p.motivo|length > 50 %}...{% endif %}</small>
+                </td>
+                <td>
+                  {% if p.estado == 'pendiente' %}
+                    <span class="badge bg-warning text-dark">Pendiente</span>
+                  {% elif p.estado == 'aprobado' %}
+                    <span class="badge bg-success">Aprobado</span>
+                  {% elif p.estado == 'rechazado' %}
+                    <span class="badge bg-danger">Rechazado</span>
+                  {% endif %}
+                </td>
+                <td>{{ p.fecha_solicitud.strftime('%d/%m/%Y %H:%M') }}</td>
+                {% if current_user.rol == 'admin' %}
+                <td class="text-center">
+                  {% if p.estado == 'pendiente' %}
+                  <div class="btn-group" role="group">
+                    <form method="POST" action="{{ url_for('rrhh.aprobar_permiso', id=p.id) }}" style="display:inline;">
+                      <button type="submit" class="btn btn-sm btn-success" title="Aprobar">
+                        <i class="bi bi-check-circle"></i>
+                      </button>
+                    </form>
+                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#modalRechazarPermiso{{ p.id }}" title="Rechazar">
+                      <i class="bi bi-x-circle"></i>
+                    </button>
+                  </div>
+                  
+                  <!-- Modal Rechazar Permiso -->
+                  <div class="modal fade" id="modalRechazarPermiso{{ p.id }}" tabindex="-1">
+                    <div class="modal-dialog">
+                      <div class="modal-content">
+                        <div class="modal-header bg-danger text-white">
+                          <h5 class="modal-title">Rechazar Permiso</h5>
+                          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <form method="POST" action="{{ url_for('rrhh.rechazar_permiso', id=p.id) }}">
+                          <div class="modal-body">
+                            <p><strong>Médico:</strong> {{ p.medico.nombre_completo if p.medico else 'N/A' }}</p>
+                            <p><strong>Fecha:</strong> {{ p.fecha.strftime('%d/%m/%Y') }}</p>
+                            <p><strong>Tipo:</strong> {{ p.tipo|title }}</p>
+                            <div class="mb-3">
+                              <label for="motivo_rechazo{{ p.id }}" class="form-label">Motivo del rechazo:</label>
+                              <textarea class="form-control" id="motivo_rechazo{{ p.id }}" name="motivo" rows="3" required></textarea>
+                            </div>
+                          </div>
+                          <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-danger">Rechazar</button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                {% endif %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center mb-0">No hay solicitudes de permisos registradas.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

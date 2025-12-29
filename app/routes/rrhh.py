@@ -10,8 +10,8 @@ bp = Blueprint('rrhh', __name__, url_prefix='/rrhh')
 @login_required
 def listar_vacaciones():
     """Listar vacaciones"""
-    if current_user.rol == 'medico' and current_user.medico:
-        vacaciones = Vacacion.query.filter_by(medico_id=current_user.medico.id)\
+    if current_user.rol in ['medico', 'recepcionista', 'cajero', 'cajera']:
+        vacaciones = Vacacion.query.filter_by(usuario_id=current_user.id) \
             .order_by(Vacacion.fecha_solicitud.desc()).all()
     else:
         vacaciones = Vacacion.query.order_by(Vacacion.fecha_solicitud.desc()).all()
@@ -22,8 +22,8 @@ def listar_vacaciones():
 @login_required
 def solicitar_vacacion():
     """Solicitar vacaciones"""
-    if current_user.rol != 'medico' or not current_user.medico:
-        flash('Solo los médicos pueden solicitar vacaciones', 'warning')
+    if current_user.rol not in ['medico', 'recepcionista', 'cajero', 'cajera']:
+        flash('No tiene permisos para solicitar vacaciones', 'warning')
         return redirect(url_for('main.index'))
     
     if request.method == 'POST':
@@ -35,7 +35,7 @@ def solicitar_vacacion():
             return redirect(url_for('rrhh.solicitar_vacacion'))
         
         vacacion = Vacacion(
-            medico_id=current_user.medico.id,
+            usuario_id=current_user.id,
             fecha_inicio=fecha_inicio,
             fecha_fin=fecha_fin,
             tipo=request.form.get('tipo', 'anual'),
@@ -91,8 +91,8 @@ def rechazar_vacacion(id):
 @login_required
 def listar_permisos():
     """Listar permisos"""
-    if current_user.rol == 'medico' and current_user.medico:
-        permisos = Permiso.query.filter_by(medico_id=current_user.medico.id)\
+    if current_user.rol in ['medico', 'recepcionista', 'cajero', 'cajera']:
+        permisos = Permiso.query.filter_by(usuario_id=current_user.id) \
             .order_by(Permiso.fecha_solicitud.desc()).all()
     else:
         permisos = Permiso.query.order_by(Permiso.fecha_solicitud.desc()).all()
@@ -103,8 +103,8 @@ def listar_permisos():
 @login_required
 def solicitar_permiso():
     """Solicitar permiso"""
-    if current_user.rol != 'medico' or not current_user.medico:
-        flash('Solo los médicos pueden solicitar permisos', 'warning')
+    if current_user.rol not in ['medico', 'recepcionista', 'cajero', 'cajera']:
+        flash('No tiene permisos para solicitar permisos', 'warning')
         return redirect(url_for('main.index'))
     
     if request.method == 'POST':
@@ -113,7 +113,7 @@ def solicitar_permiso():
         hora_fin_str = request.form.get('hora_fin')
         
         permiso = Permiso(
-            medico_id=current_user.medico.id,
+            usuario_id=current_user.id,
             fecha=fecha,
             hora_inicio=datetime.strptime(hora_inicio_str, '%H:%M').time() if hora_inicio_str else None,
             hora_fin=datetime.strptime(hora_fin_str, '%H:%M').time() if hora_fin_str else None,
@@ -147,21 +147,84 @@ def aprobar_permiso(id):
     flash('Permiso aprobado', 'success')
     return redirect(url_for('rrhh.listar_permisos'))
 
+@bp.route('/permisos/<int:id>/rechazar', methods=['POST'])
+@login_required
+def rechazar_permiso(id):
+    """Rechazar permiso"""
+    if current_user.rol not in ['admin']:
+        flash('No tiene permisos para rechazar permisos', 'danger')
+        return redirect(url_for('rrhh.listar_permisos'))
+    
+    permiso = Permiso.query.get_or_404(id)
+    permiso.estado = 'rechazado'
+    permiso.aprobado_por_id = current_user.id
+    permiso.fecha_aprobacion = datetime.utcnow()
+    
+    # Guardar motivo de rechazo en observaciones
+    motivo = request.form.get('motivo', '')
+    if motivo:
+        permiso.observaciones = f"Rechazado: {motivo}"
+    
+    db.session.commit()
+    
+    flash('Permiso rechazado', 'warning')
+    return redirect(url_for('rrhh.listar_permisos'))
+
 @bp.route('/asistencias')
 @login_required
 def listar_asistencias():
     """Listar asistencias"""
     fecha_filtro = request.args.get('fecha', date.today().isoformat())
+    fecha = datetime.strptime(fecha_filtro, '%Y-%m-%d').date()
     
-    if fecha_filtro:
-        fecha = datetime.strptime(fecha_filtro, '%Y-%m-%d').date()
+    if current_user.rol == 'admin':
         asistencias = Asistencia.query.filter_by(fecha=fecha).all()
+        asistencia_hoy = None
     else:
-        asistencias = Asistencia.query.order_by(Asistencia.fecha.desc()).limit(50).all()
+        asistencias = Asistencia.query.filter_by(usuario_id=current_user.id, fecha=fecha).all()
+        asistencia_hoy = Asistencia.query.filter_by(usuario_id=current_user.id, fecha=date.today()).first()
     
     return render_template('rrhh/listar_asistencias.html',
                          asistencias=asistencias,
-                         fecha_filtro=fecha_filtro)
+                         fecha_filtro=fecha_filtro,
+                         asistencia_hoy=asistencia_hoy)
+
+@bp.route('/asistencias/marcar-entrada', methods=['POST'])
+@login_required
+def marcar_entrada():
+    """Registrar hora de entrada para el usuario actual."""
+    hoy = date.today()
+    existente = Asistencia.query.filter_by(usuario_id=current_user.id, fecha=hoy).first()
+    if existente and existente.hora_entrada:
+        flash('La entrada ya fue registrada hoy.', 'info')
+        return redirect(url_for('rrhh.listar_asistencias', fecha=hoy.isoformat()))
+    
+    ahora = datetime.now().time()
+    if existente:
+        existente.hora_entrada = ahora
+    else:
+        registro = Asistencia(usuario_id=current_user.id, fecha=hoy, hora_entrada=ahora, estado='presente')
+        db.session.add(registro)
+    db.session.commit()
+    flash('Entrada registrada correctamente.', 'success')
+    return redirect(url_for('rrhh.listar_asistencias', fecha=hoy.isoformat()))
+
+@bp.route('/asistencias/marcar-salida', methods=['POST'])
+@login_required
+def marcar_salida():
+    """Registrar hora de salida para el usuario actual."""
+    hoy = date.today()
+    registro = Asistencia.query.filter_by(usuario_id=current_user.id, fecha=hoy).first()
+    if not registro or not registro.hora_entrada:
+        flash('Debe registrar primero la entrada.', 'warning')
+        return redirect(url_for('rrhh.listar_asistencias', fecha=hoy.isoformat()))
+    if registro.hora_salida:
+        flash('La salida ya fue registrada hoy.', 'info')
+        return redirect(url_for('rrhh.listar_asistencias', fecha=hoy.isoformat()))
+    registro.hora_salida = datetime.now().time()
+    db.session.commit()
+    flash('Salida registrada correctamente.', 'success')
+    return redirect(url_for('rrhh.listar_asistencias', fecha=hoy.isoformat()))
 
 @bp.route('/medicos')
 @login_required

@@ -2,6 +2,7 @@ from flask import Blueprint, render_template
 from flask_login import login_required, current_user
 from app.models import Cita, Consulta, Venta, Paciente
 from datetime import date, timedelta
+from decimal import Decimal
 
 bp = Blueprint('main', __name__)
 
@@ -15,7 +16,7 @@ def index():
         return medico_dashboard()
     elif current_user.rol == 'recepcionista':
         return recepcionista_dashboard()
-    elif current_user.rol == 'cajero':
+    elif current_user.rol in ['cajero', 'cajera']:
         return cajero_dashboard()
     else:
         return render_template('main/index.html')
@@ -160,7 +161,7 @@ def cajero_dashboard():
     """Dashboard para cajeros"""
     from app.models import Caja, Venta
     
-    if current_user.rol != 'cajero':
+    if current_user.rol not in ['cajero', 'cajera']:
         from flask import abort
         abort(403)
     
@@ -184,7 +185,7 @@ def cajero_dashboard():
     
     # Si tiene caja abierta, ventas de su caja
     ventas_mi_caja = []
-    total_mi_caja = 0
+    total_mi_caja = Decimal('0')
     if caja_abierta:
         # Mostrar sólo facturas pagadas del día para la caja del cajero
         ventas_mi_caja = Venta.query.filter(
@@ -193,7 +194,7 @@ def cajero_dashboard():
             Venta.fecha >= hoy,
             Venta.fecha < hoy + timedelta(days=1)
         ).order_by(Venta.fecha.desc()).limit(10).all()
-        total_mi_caja = sum(float(v.total) for v in ventas_mi_caja)
+        total_mi_caja = sum((Decimal(str(v.total)) for v in ventas_mi_caja), Decimal('0'))
     
     return render_template('main/cajero_dashboard.html',
                          caja_abierta=caja_abierta,

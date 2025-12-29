@@ -16,6 +16,8 @@ class Caja(db.Model):
     observaciones = db.Column(db.Text)
     
     # Relaciones
+    usuario_apertura = db.relationship('Usuario', foreign_keys=[usuario_apertura_id], backref='cajas_abiertas')
+    usuario_cierre = db.relationship('Usuario', foreign_keys=[usuario_cierre_id], backref='cajas_cerradas')
     ventas = db.relationship('Venta', backref='caja', lazy=True)
     
     def __repr__(self):
@@ -32,9 +34,9 @@ class Venta(db.Model):
     # Datos de facturación
     ruc_factura = db.Column(db.String(20))
     nombre_factura = db.Column(db.String(200), nullable=False)
-    direccion_factura = db.Column(db.Text)
+    direccion_facturacion = db.Column(db.Text)
     
-    caja_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=False)
+    caja_id = db.Column(db.Integer, db.ForeignKey('cajas.id'), nullable=True)  # Opcional: se asigna al procesar pago
     consulta_id = db.Column(db.Integer, db.ForeignKey('consultas.id'))
     paciente_id = db.Column(db.Integer, db.ForeignKey('pacientes.id'), nullable=False)
     fecha = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -51,6 +53,8 @@ class Venta(db.Model):
     pagos = db.relationship('Pago', backref='venta', lazy=True)
     # Relación con paciente (para acceder desde plantillas como venta.paciente)
     paciente = db.relationship('Paciente', foreign_keys=[paciente_id], lazy=True)
+    # Relación con usuario que registró la venta
+    usuario_registro_rel = db.relationship('Usuario', foreign_keys=[usuario_registro_id], lazy=True)
     
     @property
     def saldo_pendiente(self):
@@ -109,35 +113,3 @@ class Pago(db.Model):
     
     def __repr__(self):
         return f'<Pago {self.id} - {self.monto}>'
-
-class NotaCredito(db.Model):
-    """Notas de crédito"""
-    __tablename__ = 'notas_credito'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    numero = db.Column(db.String(50), unique=True, nullable=False)
-    venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id'), nullable=False)
-    fecha = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    monto = db.Column(db.Numeric(10, 2), nullable=False)
-    motivo = db.Column(db.Text, nullable=False)
-    usuario_registro_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
-    estado = db.Column(db.String(20), nullable=False, default='activa')  # activa, anulada
-    
-    def __repr__(self):
-        return f'<NotaCredito {self.numero}>'
-
-class NotaDebito(db.Model):
-    """Notas de débito"""
-    __tablename__ = 'notas_debito'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    numero = db.Column(db.String(50), unique=True, nullable=False)
-    venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id'), nullable=False)
-    fecha = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    monto = db.Column(db.Numeric(10, 2), nullable=False)
-    motivo = db.Column(db.Text, nullable=False)
-    usuario_registro_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
-    estado = db.Column(db.String(20), nullable=False, default='activa')  # activa, anulada
-    
-    def __repr__(self):
-        return f'<NotaDebito {self.numero}>'

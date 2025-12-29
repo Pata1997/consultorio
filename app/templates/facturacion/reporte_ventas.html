@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Reporte de Ventas{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>📊 Reporte de Ventas</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Inicio</a></li>
+                    <li class="breadcrumb-item active">Reporte de Ventas</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Filtros de fecha -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label for="desde" class="form-label">Fecha Desde</label>
+                    <input type="date" class="form-control" id="desde" name="desde" 
+                           value="{{ fecha_desde }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="hasta" class="form-label">Fecha Hasta</label>
+                    <input type="date" class="form-control" id="hasta" name="hasta" 
+                           value="{{ fecha_hasta }}" required>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search"></i> Buscar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Arqueos de Cajas Cerradas -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">
+                <i class="bi bi-file-earmark-pdf"></i> Arqueos de Cajas Cerradas
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if cajas_cerradas %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID Caja</th>
+                                <th>Fecha Apertura</th>
+                                <th>Fecha Cierre</th>
+                                <th>Usuario Apertura</th>
+                                <th>Usuario Cierre</th>
+                                <th>Monto Inicial</th>
+                                <th>Monto Final</th>
+                                <th>Diferencia</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for caja in cajas_cerradas %}
+                            <tr>
+                                <td><strong>#{{ caja.id }}</strong></td>
+                                <td>{{ caja.fecha_apertura.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td>{{ caja.fecha_cierre.strftime('%d/%m/%Y %H:%M') if caja.fecha_cierre else '-' }}</td>
+                                <td>{{ caja.usuario_apertura.username }}</td>
+                                <td>{{ caja.usuario_cierre.username if caja.usuario_cierre else '-' }}</td>
+                                <td class="text-end">{{ "{:,.0f}".format(caja.monto_inicial) }} Gs.</td>
+                                <td class="text-end">{{ "{:,.0f}".format(caja.monto_final) if caja.monto_final else '-' }} Gs.</td>
+                                <td class="text-end">
+                                    {% if caja.monto_final %}
+                                        {% set diferencia = caja.monto_final - caja.monto_inicial %}
+                                        <span class="{% if diferencia >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                            {{ "{:,.0f}".format(diferencia) }} Gs.
+                                        </span>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('facturacion.descargar_arqueo_pdf', id=caja.id) }}" 
+                                       class="btn btn-sm btn-danger" target="_blank" 
+                                       title="Descargar PDF de Arqueo">
+                                        <i class="bi bi-file-earmark-pdf"></i> Descargar PDF
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    No se encontraron cajas cerradas en el período seleccionado.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .table th {
+        background-color: #f8f9fa;
+    }
+    .card-header {
+        font-weight: 600;
+    }
+</style>
+{% endblock %}

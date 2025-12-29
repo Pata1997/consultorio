@@ -86,7 +86,7 @@ def get_menu_items():
             ]},
         ]
     
-    elif current_user.rol == 'cajero':
+    elif current_user.rol in ['cajero', 'cajera']:
         return [
             {'name': 'Dashboard', 'icon': 'speedometer2', 'url': 'main.cajero_dashboard'},
             {'name': 'Caja', 'icon': 'cash-stack', 'url': 'facturacion.estado_caja', 'submenu': [

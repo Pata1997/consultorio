@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Crear Nueva Especialidad{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>➕ Crear Nueva Especialidad</h2>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">
+                <i class="bi bi-plus-circle"></i> Datos de la Nueva Especialidad
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="nombre" class="form-label">Nombre de la Especialidad *</label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" required>
+                            <div class="form-text">Ejemplo: Odontología General, Ortodoncia, etc.</div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="precio_consulta" class="form-label">Precio de Consulta (Gs.) *</label>
+                            <input type="text" class="form-control" id="precio_consulta" name="precio_consulta" required>
+                            <div class="form-text">
+                                <i class="bi bi-info-circle text-info"></i>
+                                <strong>Precio con IVA incluido</strong> (10% ya incluido en el monto)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="mb-3">
+                            <label for="descripcion" class="form-label">Descripción</label>
+                            <textarea class="form-control" id="descripcion" name="descripcion" rows="3"></textarea>
+                            <div class="form-text">Opcional: descripción breve de la especialidad</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="activo" name="activo" checked>
+                            <label class="form-check-label" for="activo">
+                                <strong>Especialidad Activa</strong>
+                            </label>
+                            <div class="form-text">Solo las especialidades activas estarán disponibles para agendar consultas</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Nota:</strong> Esta especialidad estará disponible inmediatamente después de crearla.
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-save"></i> Crear Especialidad
+                    </button>
+                    <a href="{{ url_for('configuracion.listar_especialidades') }}" class="btn btn-secondary">
+                        <i class="bi bi-x-circle"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Formatear campo de precio con separador de miles
+    document.getElementById('precio_consulta').addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\./g, '');
+        if (value && !isNaN(value)) {
+            e.target.value = parseInt(value).toLocaleString('es-PY');
+        }
+    });
+</script>
+{% endblock %}

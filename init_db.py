@@ -27,6 +27,29 @@ def init_database():
             db.session.add(admin)
             print("✓ Usuario admin creado (usuario: admin, password: admin123)")
         
+        # 1.1 Crear usuarios base para caja y recepción
+        if not Usuario.query.filter_by(username='cajero').first():
+            cajero = Usuario(
+                username='cajero',
+                email='cajero@consultorio.com',
+                rol='cajero',
+                activo=True
+            )
+            cajero.set_password('cajero123')
+            db.session.add(cajero)
+            print("✓ Usuario cajero creado (usuario: cajero, password: cajero123)")
+
+        if not Usuario.query.filter_by(username='recepcion').first():
+            recepcionista = Usuario(
+                username='recepcion',
+                email='recepcion@consultorio.com',
+                rol='recepcionista',
+                activo=True
+            )
+            recepcionista.set_password('recepcion123')
+            db.session.add(recepcionista)
+            print("✓ Usuario recepcionista creado (usuario: recepcion, password: recepcion123)")
+
         # 2. Crear especialidades
         especialidades_data = [
             {'nombre': 'Medicina General', 'descripcion': 'Consultas generales', 'precio_consulta': 250000},
@@ -130,18 +153,6 @@ def init_database():
                 
                 print(f"✓ Médico Dr. {med_data['nombre']} {med_data['apellido']} creado")
         
-        # 4. Crear usuario recepcionista
-        if not Usuario.query.filter_by(username='recepcion').first():
-            recepcionista = Usuario(
-                username='recepcion',
-                email='recepcion@consultorio.com',
-                rol='recepcionista',
-                activo=True
-            )
-            recepcionista.set_password('recepcion123')
-            db.session.add(recepcionista)
-            print("✓ Usuario recepcionista creado (usuario: recepcion, password: recepcion123)")
-        
         # 5. Crear formas de pago
         formas_pago_data = [
             {'nombre': 'efectivo', 'descripcion': 'Pago en efectivo', 'requiere_referencia': False},
@@ -159,16 +170,16 @@ def init_database():
         
         # 6. Crear insumos de ejemplo
         insumos_data = [
-            {'nombre': 'Anestesia dental', 'precio_unitario': 50000, 'cantidad_actual': 20, 
-             'stock_minimo': 10, 'especialidades': ['Odontología']},
-            {'nombre': 'Amalgama dental', 'precio_unitario': 80000, 'cantidad_actual': 15,
-             'stock_minimo': 10, 'especialidades': ['Odontología']},
-            {'nombre': 'Guantes látex (caja 100)', 'precio_unitario': 50000, 'cantidad_actual': 10,
-             'stock_minimo': 5, 'especialidades': ['Odontología', 'Medicina General', 'Pediatría']},
-            {'nombre': 'Jeringas descartables (paquete 10)', 'precio_unitario': 30000, 'cantidad_actual': 8,
-             'stock_minimo': 5, 'especialidades': ['Medicina General', 'Pediatría']},
-            {'nombre': 'Gasas esterilizadas', 'precio_unitario': 15000, 'cantidad_actual': 25,
-             'stock_minimo': 15, 'especialidades': ['Odontología', 'Medicina General']},
+            {'nombre': 'Anestesia dental', 'precio_compra': 30000, 'precio_venta': 50000, 'cantidad_actual': 20,
+             'stock_minimo': 10, 'unidad_medida': 'unidad', 'categoria': 'consumible', 'especialidades': ['Odontología']},
+            {'nombre': 'Amalgama dental', 'precio_compra': 50000, 'precio_venta': 80000, 'cantidad_actual': 15,
+             'stock_minimo': 10, 'unidad_medida': 'unidad', 'categoria': 'consumible', 'especialidades': ['Odontología']},
+            {'nombre': 'Guantes látex (caja 100)', 'precio_compra': 30000, 'precio_venta': 50000, 'cantidad_actual': 10,
+             'stock_minimo': 5, 'unidad_medida': 'caja', 'categoria': 'consumible', 'especialidades': ['Odontología', 'Medicina General', 'Pediatría']},
+            {'nombre': 'Jeringas descartables (paquete 10)', 'precio_compra': 20000, 'precio_venta': 30000, 'cantidad_actual': 8,
+             'stock_minimo': 5, 'unidad_medida': 'paquete', 'categoria': 'consumible', 'especialidades': ['Medicina General', 'Pediatría']},
+            {'nombre': 'Gasas esterilizadas', 'precio_compra': 8000, 'precio_venta': 15000, 'cantidad_actual': 25,
+             'stock_minimo': 15, 'unidad_medida': 'paquete', 'categoria': 'consumible', 'especialidades': ['Odontología', 'Medicina General']},
         ]
         
         for ins_data in insumos_data:
@@ -212,6 +223,27 @@ def init_database():
                 db.session.add(procedimiento)
                 print(f"✓ Procedimiento {proc_data['nombre']} creado")
         
+        # 7.5 Crear configuracion si falta (antes de pacientes/ventas)
+        if not ConfiguracionConsultorio.query.first():
+            config = ConfiguracionConsultorio(
+                nombre='Consultorio Médico San Rafael',
+                razon_social='Consultorio Médico San Rafael S.R.L.',
+                ruc='80012345-6',
+                direccion='Av. San Martín 1234, Asunción, Paraguay',
+                telefono='(021) 123-4567',
+                email='info@consultoriosanrafael.com',
+                sitio_web='www.consultoriosanrafael.com',
+                slogan='Tu salud es nuestra prioridad',
+                horario_atencion='Lunes a Viernes: 8:00 - 18:00 | Sábados: 8:00 - 12:00',
+                punto_expedicion='001-001',
+                timbrado='12345678',
+                fecha_inicio_timbrado=date(2025, 1, 1),
+                fecha_fin_timbrado=date(2025, 12, 31),
+                numero_factura_actual=1
+            )
+            db.session.add(config)
+            print("✓ Configuración del consultorio creada")
+
         # 8. Crear pacientes de ejemplo
         pacientes_data = [
             {'nombre': 'Pedro', 'apellido': 'González', 'cedula': '4567890', 
@@ -233,34 +265,14 @@ def init_database():
         
         db.session.commit()
         
-        # 8. Crear configuración del consultorio
-        if not ConfiguracionConsultorio.query.first():
-            config = ConfiguracionConsultorio(
-                nombre='Consultorio Médico San Rafael',
-                razon_social='Consultorio Médico San Rafael S.R.L.',
-                ruc='80012345-6',
-                direccion='Av. San Martín 1234, Asunción, Paraguay',
-                telefono='(021) 123-4567',
-                email='info@consultoriosanrafael.com',
-                sitio_web='www.consultoriosanrafael.com',
-                slogan='Tu salud es nuestra prioridad',
-                horario_atencion='Lunes a Viernes: 8:00 - 18:00 | Sábados: 8:00 - 12:00',
-                punto_expedicion='001-001',
-                timbrado='12345678',
-                fecha_inicio_timbrado=date(2025, 1, 1),
-                fecha_fin_timbrado=date(2025, 12, 31),
-                numero_factura_actual=1
-            )
-            db.session.add(config)
-            print("✓ Configuración del consultorio creada")
-        
-        db.session.commit()
-        
         print("\n✅ Base de datos inicializada correctamente!")
         print("\n=== CREDENCIALES DE ACCESO ===")
         print("Administrador:")
         print("  Usuario: admin")
         print("  Password: admin123")
+        print("\nCajero:")
+        print("  Usuario: cajero")
+        print("  Password: cajero123")
         print("\nRecepcionista:")
         print("  Usuario: recepcion")
         print("  Password: recepcion123")
