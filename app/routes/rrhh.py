@@ -236,36 +236,69 @@ def listar_medicos():
 @bp.route('/medicos/nuevo', methods=['GET', 'POST'])
 @login_required
 def nuevo_medico():
-    """Crear nuevo médico"""
+    """Crear nuevo médico vinculado a usuario existente"""
     if request.method == 'POST':
-        # Primero crear el usuario
-        username = request.form.get('username')
-        email = request.form.get('email')
-        password = request.form.get('password')
+        usuario_id = request.form.get('usuario_id')
         
-        usuario = Usuario(
-            username=username,
-            email=email,
-            rol='medico',
-            activo=True
-        )
-        usuario.set_password(password)
-        db.session.add(usuario)
-        db.session.flush()  # Para obtener el ID del usuario
+        # Validar que el usuario existe y no tiene médico asignado
+        if usuario_id:
+            usuario = Usuario.query.get(usuario_id)
+            if not usuario:
+                flash('Usuario no encontrado', 'danger')
+                return redirect(url_for('rrhh.nuevo_medico'))
+            if usuario.rol != 'medico':
+                flash('El usuario seleccionado no tiene rol de médico', 'warning')
+                return redirect(url_for('rrhh.nuevo_medico'))
+            if usuario.medico:
+                flash('Este usuario ya tiene un perfil médico asignado', 'warning')
+                return redirect(url_for('rrhh.nuevo_medico'))
+        else:
+            # Si no se selecciona usuario, crear uno nuevo (modo legacy)
+            username = request.form.get('username')
+            email = request.form.get('email')
+            password = request.form.get('password')
+            
+            if not username or not email or not password:
+                flash('Completa los datos del usuario', 'warning')
+                return redirect(url_for('rrhh.nuevo_medico'))
+            
+            usuario = Usuario(
+                username=username,
+                email=email,
+                rol='medico',
+                activo=True
+            )
+            usuario.set_password(password)
+            db.session.add(usuario)
+            db.session.flush()  # Para obtener el ID del usuario
         
-        # Luego crear el médico
+        # Validar unicidad de cédula y registro
+        cedula = request.form.get('cedula')
+        registro_profesional = request.form.get('registro_profesional')
+        
+        if Medico.query.filter_by(cedula=cedula).first():
+            db.session.rollback()
+            flash('Ya existe un médico con esa cédula', 'danger')
+            return redirect(url_for('rrhh.nuevo_medico'))
+        if Medico.query.filter_by(registro_profesional=registro_profesional).first():
+            db.session.rollback()
+            flash('Ya existe un médico con ese registro profesional', 'danger')
+            return redirect(url_for('rrhh.nuevo_medico'))
+        
+        # Crear el médico
         medico = Medico(
             usuario_id=usuario.id,
             nombre=request.form.get('nombre'),
             apellido=request.form.get('apellido'),
-            cedula=request.form.get('cedula'),
-            registro_profesional=request.form.get('registro_profesional'),
+            cedula=cedula,
+            registro_profesional=registro_profesional,
             telefono=request.form.get('telefono'),
             email=request.form.get('email_medico'),
             fecha_ingreso=datetime.strptime(request.form.get('fecha_ingreso'), '%Y-%m-%d').date(),
             activo=True
         )
         db.session.add(medico)
+        db.session.flush()
         
         # Asignar especialidades
         especialidades_ids = request.form.getlist('especialidades')
@@ -282,7 +315,14 @@ def nuevo_medico():
     
     # GET - mostrar formulario
     especialidades = Especialidad.query.filter_by(activo=True).all()
-    return render_template('rrhh/nuevo_medico.html', especialidades=especialidades)
+    # Obtener usuarios con rol médico que NO tienen perfil médico asignado
+    usuarios_sin_medico = Usuario.query.filter(
+        Usuario.rol == 'medico',
+        ~Usuario.id.in_(db.session.query(Medico.usuario_id))
+    ).all()
+    return render_template('rrhh/nuevo_medico.html', 
+                         especialidades=especialidades,
+                         usuarios_sin_medico=usuarios_sin_medico)
 
 @bp.route('/medicos/editar/<int:id>', methods=['GET', 'POST'])
 @login_required

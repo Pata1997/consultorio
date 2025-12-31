@@ -10,20 +10,60 @@
                 <h4><i class="bi bi-person-plus"></i> Registrar Nuevo Médico</h4>
             </div>
             <div class="card-body">
-                <form method="POST">
-                    <h5 class="border-bottom pb-2 mb-3">Datos de Usuario</h5>
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <label for="username" class="form-label">Usuario <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="username" name="username" required>
+                <form method="POST" id="formMedico">
+                    <!-- Selector de modo: usuario existente o nuevo -->
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> 
+                        <strong>Modo de creación:</strong> 
+                        Puedes vincular un usuario existente con rol médico o crear uno nuevo.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">¿Vincular a usuario existente?</label>
+                        <select class="form-select" id="selectModo">
+                            <option value="existente">Sí, seleccionar usuario existente</option>
+                            <option value="nuevo">No, crear nuevo usuario</option>
+                        </select>
+                    </div>
+
+                    <!-- Opción 1: Seleccionar usuario existente -->
+                    <div id="modoExistente">
+                        <h5 class="border-bottom pb-2 mb-3">Usuario Existente</h5>
+                        <div class="mb-3">
+                            <label for="usuario_id" class="form-label">Seleccionar Usuario <span class="text-danger">*</span></label>
+                            <select class="form-select" id="usuario_id" name="usuario_id">
+                                <option value="">-- Seleccione un usuario médico sin perfil --</option>
+                                {% for usuario in usuarios_sin_medico %}
+                                <option value="{{ usuario.id }}">
+                                    {{ usuario.username }} ({{ usuario.email }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            {% if not usuarios_sin_medico %}
+                            <div class="form-text text-muted">
+                                No hay usuarios con rol 'médico' disponibles. Crea uno desde 
+                                <a href="{{ url_for('usuarios.nuevo_usuario') }}">Usuarios → Nuevo</a>
+                            </div>
+                            {% endif %}
                         </div>
-                        <div class="col-md-4">
-                            <label for="email" class="form-label">Email (Usuario) <span class="text-danger">*</span></label>
-                            <input type="email" class="form-control" id="email" name="email" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="password" class="form-label">Contraseña <span class="text-danger">*</span></label>
-                            <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+
+                    <!-- Opción 2: Crear nuevo usuario -->
+                    <div id="modoNuevo" style="display:none;">
+                        <h5 class="border-bottom pb-2 mb-3">Datos de Usuario</h5>
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="username" class="form-label">Usuario <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="username" name="username">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="email" class="form-label">Email (Usuario) <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="email" name="email">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="password" class="form-label">Contraseña <span class="text-danger">*</span></label>
+                                <input type="password" class="form-control" id="password" name="password">
+                            </div>
                         </div>
                     </div>
 
@@ -101,4 +141,50 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectModo = document.getElementById('selectModo');
+    const modoExistente = document.getElementById('modoExistente');
+    const modoNuevo = document.getElementById('modoNuevo');
+    const usuarioIdSelect = document.getElementById('usuario_id');
+    const usernameInput = document.getElementById('username');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const formMedico = document.getElementById('formMedico');
+
+    // Cambiar entre modos
+    selectModo.addEventListener('change', function() {
+        if (this.value === 'existente') {
+            modoExistente.style.display = 'block';
+            modoNuevo.style.display = 'none';
+            // Hacer required el select de usuario
+            usuarioIdSelect.setAttribute('required', 'required');
+            // Quitar required de inputs de nuevo usuario
+            usernameInput.removeAttribute('required');
+            emailInput.removeAttribute('required');
+            passwordInput.removeAttribute('required');
+        } else {
+            modoExistente.style.display = 'none';
+            modoNuevo.style.display = 'block';
+            // Quitar required del select
+            usuarioIdSelect.removeAttribute('required');
+            usuarioIdSelect.value = '';  // Limpiar selección
+            // Hacer required los inputs de nuevo usuario
+            usernameInput.setAttribute('required', 'required');
+            emailInput.setAttribute('required', 'required');
+            passwordInput.setAttribute('required', 'required');
+        }
+    });
+
+    // Validar especialidades al enviar
+    formMedico.addEventListener('submit', function(e) {
+        const especialidadesChecked = document.querySelectorAll('input[name="especialidades"]:checked');
+        if (especialidadesChecked.length === 0) {
+            e.preventDefault();
+            alert('Debe seleccionar al menos una especialidad');
+        }
+    });
+});
+</script>
 {% endblock %}

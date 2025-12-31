@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app import db
-from app.models.usuario import Usuario
+from app.models.usuario import Usuario, Medico, Especialidad, MedicoEspecialidad
+from datetime import datetime
 
 bp = Blueprint('usuarios', __name__, url_prefix='/usuarios')
 
@@ -57,14 +58,69 @@ def nuevo_usuario():
             flash('El email ya está en uso', 'danger')
             return redirect(url_for('usuarios.nuevo_usuario'))
 
+        # Crear usuario
         u = Usuario(username=username, email=email, rol=rol, activo=True)
         u.set_password(password)
         db.session.add(u)
+        db.session.flush()  # Obtener u.id antes de commit
+
+        # Si es médico, crear registro en tabla medicos
+        if rol == 'medico':
+            nombre = request.form.get('nombre', '').strip()
+            apellido = request.form.get('apellido', '').strip()
+            cedula = request.form.get('cedula', '').strip()
+            registro_profesional = request.form.get('registro_profesional', '').strip()
+            fecha_ingreso_str = request.form.get('fecha_ingreso', '')
+
+            # Validar campos obligatorios de médico
+            if not nombre or not apellido or not cedula or not registro_profesional or not fecha_ingreso_str:
+                db.session.rollback()
+                flash('Para crear un usuario médico, completa todos los datos profesionales', 'warning')
+                return redirect(url_for('usuarios.nuevo_usuario'))
+
+            # Validar unicidad de cédula y registro profesional
+            if Medico.query.filter_by(cedula=cedula).first():
+                db.session.rollback()
+                flash('Ya existe un médico con esa cédula', 'danger')
+                return redirect(url_for('usuarios.nuevo_usuario'))
+            if Medico.query.filter_by(registro_profesional=registro_profesional).first():
+                db.session.rollback()
+                flash('Ya existe un médico con ese registro profesional', 'danger')
+                return redirect(url_for('usuarios.nuevo_usuario'))
+
+            medico = Medico(
+                usuario_id=u.id,
+                nombre=nombre,
+                apellido=apellido,
+                cedula=cedula,
+                registro_profesional=registro_profesional,
+                telefono=request.form.get('telefono', ''),
+                email=request.form.get('email_medico', email),  # Usar email del usuario si no se provee
+                fecha_ingreso=datetime.strptime(fecha_ingreso_str, '%Y-%m-%d').date(),
+                activo=True
+            )
+            db.session.add(medico)
+            db.session.flush()  # Obtener medico.id
+
+            # Asignar especialidades
+            especialidades_ids = request.form.getlist('especialidades')
+            for esp_id in especialidades_ids:
+                me = MedicoEspecialidad(
+                    medico_id=medico.id,
+                    especialidad_id=int(esp_id)
+                )
+                db.session.add(me)
+
         db.session.commit()
-        flash('Usuario creado correctamente', 'success')
+        if rol == 'medico':
+            flash('Usuario y perfil médico creados correctamente', 'success')
+        else:
+            flash('Usuario creado correctamente', 'success')
         return redirect(url_for('usuarios.listar_usuarios'))
 
-    return render_template('usuarios/nuevo_usuario.html')
+    # GET - pasar especialidades para el formulario
+    especialidades = Especialidad.query.filter_by(activo=True).all()
+    return render_template('usuarios/nuevo_usuario.html', especialidades=especialidades)
 
 
 @bp.route('/<int:id>/editar', methods=['GET', 'POST'])

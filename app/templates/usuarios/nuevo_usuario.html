@@ -8,7 +8,9 @@
 
 <div class="card">
   <div class="card-body">
-    <form method="post">
+    <form method="post" id="formUsuario">
+      <!-- Datos de Usuario -->
+      <h5 class="border-bottom pb-2 mb-3">Datos de Usuario</h5>
       <div class="row g-3">
         <div class="col-md-4">
           <label class="form-label">Usuario *</label>
@@ -16,11 +18,18 @@
         </div>
         <div class="col-md-4">
           <label class="form-label">Email *</label>
-          <input type="email" name="email" class="form-control" required>
+          <input type="email" name="email" id="emailUsuario" class="form-control" required>
         </div>
         <div class="col-md-4">
+          <label class="form-label">Contraseña *</label>
+          <input type="password" name="password" class="form-control" required>
+        </div>
+      </div>
+      <div class="row g-3 mt-2">
+        <div class="col-md-4">
           <label class="form-label">Rol *</label>
-          <select name="rol" class="form-select" required>
+          <select name="rol" id="selectRol" class="form-select" required>
+            <option value="">-- Seleccione --</option>
             <option value="admin">Admin</option>
             <option value="medico">Médico</option>
             <option value="recepcionista">Recepcionista</option>
@@ -29,15 +38,118 @@
             <option value="enfermera">Enfermera</option>
           </select>
         </div>
-        <div class="col-md-4">
-          <label class="form-label">Contraseña *</label>
-          <input type="password" name="password" class="form-control" required>
+      </div>
+
+      <!-- Datos Profesionales (solo para médicos) -->
+      <div id="datosMedico" style="display: none;">
+        <h5 class="border-bottom pb-2 mb-3 mt-4">Datos Profesionales (Médico)</h5>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Nombre *</label>
+            <input type="text" name="nombre" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Apellido *</label>
+            <input type="text" name="apellido" class="form-control">
+          </div>
+        </div>
+        <div class="row g-3 mt-2">
+          <div class="col-md-6">
+            <label class="form-label">Cédula *</label>
+            <input type="text" name="cedula" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Registro Profesional *</label>
+            <input type="text" name="registro_profesional" class="form-control">
+          </div>
+        </div>
+        <div class="row g-3 mt-2">
+          <div class="col-md-4">
+            <label class="form-label">Teléfono</label>
+            <input type="text" name="telefono" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Email (Profesional)</label>
+            <input type="email" name="email_medico" id="emailMedico" class="form-control" 
+                   placeholder="Opcional, se usa email del usuario si está vacío">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Fecha de Ingreso *</label>
+            <input type="date" name="fecha_ingreso" class="form-control">
+          </div>
+        </div>
+
+        <h5 class="border-bottom pb-2 mb-3 mt-4">Especialidades *</h5>
+        <div class="row">
+          {% for especialidad in especialidades %}
+          <div class="col-md-6">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" 
+                     name="especialidades" value="{{ especialidad.id }}" 
+                     id="esp_{{ especialidad.id }}">
+              <label class="form-check-label" for="esp_{{ especialidad.id }}">
+                {{ especialidad.nombre }}
+              </label>
+            </div>
+          </div>
+          {% endfor %}
         </div>
       </div>
+
       <div class="mt-4">
         <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> Guardar</button>
+        <a href="{{ url_for('usuarios.listar_usuarios') }}" class="btn btn-secondary ms-2">Cancelar</a>
       </div>
     </form>
   </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const selectRol = document.getElementById('selectRol');
+  const datosMedico = document.getElementById('datosMedico');
+  const formUsuario = document.getElementById('formUsuario');
+  const emailUsuario = document.getElementById('emailUsuario');
+  const emailMedico = document.getElementById('emailMedico');
+
+  // Mostrar/ocultar sección de médico según rol seleccionado
+  selectRol.addEventListener('change', function() {
+    if (this.value === 'medico') {
+      datosMedico.style.display = 'block';
+      // Hacer campos obligatorios
+      datosMedico.querySelectorAll('input[name="nombre"], input[name="apellido"], input[name="cedula"], input[name="registro_profesional"], input[name="fecha_ingreso"]').forEach(input => {
+        input.setAttribute('required', 'required');
+      });
+      // Auto-copiar email si email_medico está vacío
+      if (!emailMedico.value) {
+        emailMedico.value = emailUsuario.value;
+      }
+    } else {
+      datosMedico.style.display = 'none';
+      // Quitar required de campos de médico
+      datosMedico.querySelectorAll('input').forEach(input => {
+        input.removeAttribute('required');
+      });
+    }
+  });
+
+  // Sincronizar email si cambia el email del usuario y médico no lo modificó
+  emailUsuario.addEventListener('input', function() {
+    if (selectRol.value === 'medico' && !emailMedico.value) {
+      emailMedico.value = this.value;
+    }
+  });
+
+  // Validar especialidades al enviar si es médico
+  formUsuario.addEventListener('submit', function(e) {
+    if (selectRol.value === 'medico') {
+      const especialidadesChecked = datosMedico.querySelectorAll('input[name="especialidades"]:checked');
+      if (especialidadesChecked.length === 0) {
+        e.preventDefault();
+        alert('Debe seleccionar al menos una especialidad para el médico');
+      }
+    }
+  });
+});
+</script>
 {% endblock %}

@@ -256,7 +256,7 @@ def disponibilidad_semanal(medico_id):
     # Obtener vacaciones del médico
     medico = Medico.query.get_or_404(medico_id)
     vacaciones = Vacacion.query.filter(
-        Vacacion.medico_id == medico_id,
+        Vacacion.usuario_id == medico.usuario_id,
         Vacacion.estado == 'aprobada',
         Vacacion.fecha_inicio <= dias_semana[-1],
         Vacacion.fecha_fin >= dias_semana[0]
@@ -264,7 +264,7 @@ def disponibilidad_semanal(medico_id):
     
     # Obtener permisos del médico
     permisos = Permiso.query.filter(
-        Permiso.medico_id == medico_id,
+        Permiso.usuario_id == medico.usuario_id,
         Permiso.estado == 'aprobado',
         Permiso.fecha.in_(dias_semana)
     ).all()
