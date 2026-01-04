@@ -8,7 +8,7 @@ class Config:
     """Configuración base"""
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-cambiar-en-produccion'
     
-    # URL de base de datos - IMPORTANTE: usar postgresql+pg8000://
+    # URL de base de datos - IMPORTANTE: usar postgresql+pg8000:// Pruebada localmente
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
         'postgresql+pg8000://postgres:123456@localhost:5432/consultorio_db'
     
