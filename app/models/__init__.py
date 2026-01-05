@@ -10,6 +10,7 @@ from app.models.facturacion import (
 )
 from app.models.rrhh import Vacacion, Permiso, Asistencia
 from app.models.configuracion import ConfiguracionConsultorio
+from app.models.auditoria import AuditLog
 
 __all__ = [
     'Usuario', 'Paciente', 'Especialidad', 'Medico', 'MedicoEspecialidad', 'HorarioAtencion',
@@ -17,5 +18,6 @@ __all__ = [
     'ConsultaInsumo', 'MovimientoInsumo', 'Procedimiento', 'ConsultaProcedimiento',
     'ProcedimientoPrecio',
     'Caja', 'Venta', 'VentaDetalle', 'FormaPago', 'Pago',
-    'Vacacion', 'Permiso', 'Asistencia', 'ConfiguracionConsultorio'
+    'Vacacion', 'Permiso', 'Asistencia', 'ConfiguracionConsultorio',
+    'AuditLog'
 ]

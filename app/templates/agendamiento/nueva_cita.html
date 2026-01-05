@@ -418,14 +418,21 @@ function cargarCalendarioSemanal() {
     const fecha = fechaActual.toISOString().split('T')[0];
     
     fetch(`/agendamiento/api/disponibilidad-semanal/${medicoActual}?fecha=${fecha}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => {
+                    throw new Error(`HTTP ${response.status}: ${text}`);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             mostrarCalendario(data);
         })
         .catch(error => {
-            console.error('Error:', error);
+            console.error('Error al cargar disponibilidad:', error);
             document.getElementById('calendario_semana').innerHTML = 
-                '<p class="text-danger">Error al cargar disponibilidad</p>';
+                `<p class="text-danger"><i class="bi bi-exclamation-circle"></i> Error al cargar disponibilidad: ${error.message}</p>`;
         });
 }
 

@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Bitácora del Sistema{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2><i class="bi bi-book"></i> Bitácora del Sistema</h2>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-2">
+        <label class="form-label">Fecha Inicio</label>
+        <input type="date" name="fecha_inicio" class="form-control" value="{{ fecha_inicio or '' }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Fecha Fin</label>
+        <input type="date" name="fecha_fin" class="form-control" value="{{ fecha_fin or '' }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Usuario</label>
+        <select name="usuario_id" class="form-select">
+          <option value="">-- Todos --</option>
+          {% for user in usuarios %}
+          <option value="{{ user.id }}" {% if usuario_id == user.id %}selected{% endif %}>
+            {{ user.username }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Acción</label>
+        <select name="accion" class="form-select">
+          <option value="">-- Todas --</option>
+          <option value="crear" {% if accion == 'crear' %}selected{% endif %}>Crear</option>
+          <option value="editar" {% if accion == 'editar' %}selected{% endif %}>Editar</option>
+          <option value="eliminar" {% if accion == 'eliminar' %}selected{% endif %}>Eliminar</option>
+          <option value="aprobar" {% if accion == 'aprobar' %}selected{% endif %}>Aprobar</option>
+          <option value="rechazar" {% if accion == 'rechazar' %}selected{% endif %}>Rechazar</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Tabla</label>
+        <select name="tabla" class="form-select">
+          <option value="">-- Todas --</option>
+          <option value="usuarios" {% if tabla == 'usuarios' %}selected{% endif %}>Usuarios</option>
+          <option value="citas" {% if tabla == 'citas' %}selected{% endif %}>Citas</option>
+          <option value="consultas" {% if tabla == 'consultas' %}selected{% endif %}>Consultas</option>
+          <option value="ventas" {% if tabla == 'ventas' %}selected{% endif %}>Ventas</option>
+          <option value="vacaciones" {% if tabla == 'vacaciones' %}selected{% endif %}>Vacaciones</option>
+          <option value="permisos" {% if tabla == 'permisos' %}selected{% endif %}>Permisos</option>
+          <option value="medicos" {% if tabla == 'medicos' %}selected{% endif %}>Médicos</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-search"></i> Buscar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Tabla de bitácora -->
+<div class="table-responsive">
+  <table class="table table-sm table-striped">
+    <thead class="table-dark">
+      <tr>
+        <th>Fecha/Hora</th>
+        <th>Usuario</th>
+        <th>Acción</th>
+        <th>Tabla</th>
+        <th>Registro ID</th>
+        <th>Descripción</th>
+        <th>IP</th>
+        <th>Detalles</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if logs %}
+        {% for log in logs %}
+        <tr>
+          <td>
+            <small>{{ log.timestamp.strftime('%d/%m/%Y %H:%M:%S') }}</small>
+          </td>
+          <td>
+            <span class="badge bg-info">{{ log.usuario.username }}</span>
+          </td>
+          <td>
+            {% if log.accion == 'crear' %}
+              <span class="badge bg-success">{{ log.accion }}</span>
+            {% elif log.accion == 'editar' %}
+              <span class="badge bg-warning">{{ log.accion }}</span>
+            {% elif log.accion == 'eliminar' %}
+              <span class="badge bg-danger">{{ log.accion }}</span>
+            {% elif log.accion == 'aprobar' %}
+              <span class="badge bg-success">{{ log.accion }}</span>
+            {% elif log.accion == 'rechazar' %}
+              <span class="badge bg-danger">{{ log.accion }}</span>
+            {% else %}
+              <span class="badge bg-secondary">{{ log.accion }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <code>{{ log.tabla }}</code>
+          </td>
+          <td>
+            <strong>#{{ log.registro_id }}</strong>
+          </td>
+          <td>
+            {% if log.descripcion %}
+              {{ log.descripcion[:60] }}{% if log.descripcion|length > 60 %}...{% endif %}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>
+            <small class="text-muted">{{ log.ip or '-' }}</small>
+          </td>
+          <td>
+            {% if log.cambios %}
+              <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#modal{{ log.id }}">
+                <i class="bi bi-eye"></i> Ver
+              </button>
+              
+              <!-- Modal con detalles -->
+              <div class="modal fade" id="modal{{ log.id }}" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title">Detalles de Cambios - Registro #{{ log.registro_id }}</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                      <pre class="bg-light p-3 rounded">{{ log.cambios | tojson(indent=2) }}</pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="8" class="text-center text-muted py-4">
+            No hay registros de auditoría
+          </td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Paginación -->
+{% if logs %}
+<nav aria-label="Paginación">
+  <ul class="pagination justify-content-center">
+    {% if page > 1 %}
+      <li class="page-item">
+        <a class="page-link" href="?page=1{% if fecha_inicio %}&fecha_inicio={{ fecha_inicio }}{% endif %}{% if fecha_fin %}&fecha_fin={{ fecha_fin }}{% endif %}{% if usuario_id %}&usuario_id={{ usuario_id }}{% endif %}{% if accion %}&accion={{ accion }}{% endif %}{% if tabla %}&tabla={{ tabla }}{% endif %}">Primero</a>
+      </li>
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page - 1 }}{% if fecha_inicio %}&fecha_inicio={{ fecha_inicio }}{% endif %}{% if fecha_fin %}&fecha_fin={{ fecha_fin }}{% endif %}{% if usuario_id %}&usuario_id={{ usuario_id }}{% endif %}{% if accion %}&accion={{ accion }}{% endif %}{% if tabla %}&tabla={{ tabla }}{% endif %}">Anterior</a>
+      </li>
+    {% endif %}
+    
+    <li class="page-item active">
+      <span class="page-link">Página {{ page }} de {{ total_pages }}</span>
+    </li>
+    
+    {% if page < total_pages %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page + 1 }}{% if fecha_inicio %}&fecha_inicio={{ fecha_inicio }}{% endif %}{% if fecha_fin %}&fecha_fin={{ fecha_fin }}{% endif %}{% if usuario_id %}&usuario_id={{ usuario_id }}{% endif %}{% if accion %}&accion={{ accion }}{% endif %}{% if tabla %}&tabla={{ tabla }}{% endif %}">Siguiente</a>
+      </li>
+      <li class="page-item">
+        <a class="page-link" href="?page={{ total_pages }}{% if fecha_inicio %}&fecha_inicio={{ fecha_inicio }}{% endif %}{% if fecha_fin %}&fecha_fin={{ fecha_fin }}{% endif %}{% if usuario_id %}&usuario_id={{ usuario_id }}{% endif %}{% if accion %}&accion={{ accion }}{% endif %}{% if tabla %}&tabla={{ tabla }}{% endif %}">Último</a>
+      </li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+{% endblock %}

@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app import db
 from app.models.usuario import Usuario, Medico, Especialidad, MedicoEspecialidad
+from app.utils.auditoria import audit
 from datetime import datetime
 
 bp = Blueprint('usuarios', __name__, url_prefix='/usuarios')
@@ -112,6 +113,15 @@ def nuevo_usuario():
                 db.session.add(me)
 
         db.session.commit()
+        
+        # Auditar creación de usuario
+        audit(
+            accion='crear',
+            tabla='usuarios',
+            registro_id=u.id,
+            descripcion=f'Nuevo usuario creado: {u.username} (rol: {u.rol})'
+        )
+        
         if rol == 'medico':
             flash('Usuario y perfil médico creados correctamente', 'success')
         else:
@@ -153,6 +163,15 @@ def editar_usuario(id):
         if password:
             u.set_password(password)
         db.session.commit()
+        
+        # Auditar edición de usuario
+        audit(
+            accion='editar',
+            tabla='usuarios',
+            registro_id=u.id,
+            descripcion=f'Usuario {u.username} actualizado'
+        )
+        
         flash('Usuario actualizado correctamente', 'success')
         return redirect(url_for('usuarios.listar_usuarios'))
 
@@ -168,6 +187,15 @@ def toggle_activo(id):
     u = Usuario.query.get_or_404(id)
     u.activo = not u.activo
     db.session.commit()
+    
+    # Auditar cambio de estado
+    audit(
+        accion='editar',
+        tabla='usuarios',
+        registro_id=u.id,
+        descripcion=f'Usuario {u.username} {"habilitado" if u.activo else "deshabilitado"}'
+    )
+    
     estado = 'habilitado' if u.activo else 'inhabilitado'
     flash(f'Usuario {estado} correctamente', 'info')
     return redirect(url_for('usuarios.listar_usuarios'))

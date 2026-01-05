@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app import db
 from app.models import Vacacion, Permiso, Asistencia, Medico, HorarioAtencion, Usuario, Especialidad, MedicoEspecialidad
+from app.utils.auditoria import audit
 from datetime import datetime, date, time
 
 bp = Blueprint('rrhh', __name__, url_prefix='/rrhh')
@@ -45,6 +46,9 @@ def solicitar_vacacion():
         db.session.add(vacacion)
         db.session.commit()
         
+        # Auditar solicitud de vacación
+        audit('crear', 'vacaciones', vacacion.id, descripcion=f'Solicitud de vacaciones: {vacacion.fecha_inicio} a {vacacion.fecha_fin}')
+        
         flash('Solicitud de vacaciones enviada', 'success')
         return redirect(url_for('rrhh.listar_vacaciones'))
     
@@ -65,6 +69,9 @@ def aprobar_vacacion(id):
     
     db.session.commit()
     
+    # Auditar aprobación
+    audit('aprobar', 'vacaciones', vacacion.id, descripcion=f'Vacación aprobada - {vacacion.usuario.username}')
+    
     flash('Vacación aprobada', 'success')
     return redirect(url_for('rrhh.listar_vacaciones'))
 
@@ -83,6 +90,9 @@ def rechazar_vacacion(id):
     vacacion.observaciones = request.form.get('motivo', '')
     
     db.session.commit()
+    
+    # Auditar rechazo
+    audit('rechazar', 'vacaciones', vacacion.id, descripcion=f'Vacación rechazada - {vacacion.usuario.username}')
     
     flash('Vacación rechazada', 'info')
     return redirect(url_for('rrhh.listar_vacaciones'))
@@ -124,6 +134,9 @@ def solicitar_permiso():
         db.session.add(permiso)
         db.session.commit()
         
+        # Auditar solicitud de permiso
+        audit('crear', 'permisos', permiso.id, descripcion=f'Solicitud de permiso - {permiso.tipo} ({permiso.fecha})')
+        
         flash('Solicitud de permiso enviada', 'success')
         return redirect(url_for('rrhh.listar_permisos'))
     
@@ -143,6 +156,9 @@ def aprobar_permiso(id):
     permiso.fecha_aprobacion = datetime.utcnow()
     
     db.session.commit()
+    
+    # Auditar aprobación
+    audit('aprobar', 'permisos', permiso.id, descripcion=f'Permiso aprobado - {permiso.usuario.username}')
     
     flash('Permiso aprobado', 'success')
     return redirect(url_for('rrhh.listar_permisos'))
@@ -166,6 +182,9 @@ def rechazar_permiso(id):
         permiso.observaciones = f"Rechazado: {motivo}"
     
     db.session.commit()
+    
+    # Auditar rechazo
+    audit('rechazar', 'permisos', permiso.id, descripcion=f'Permiso rechazado - {permiso.usuario.username}')
     
     flash('Permiso rechazado', 'warning')
     return redirect(url_for('rrhh.listar_permisos'))
@@ -310,6 +329,7 @@ def nuevo_medico():
             db.session.add(me)
         
         db.session.commit()
+        audit('crear', 'medicos', medico.id, descripcion=f'Médico registrado: {medico.nombre} {medico.apellido} (Cédula: {medico.cedula})')
         flash('Médico registrado exitosamente', 'success')
         return redirect(url_for('rrhh.listar_medicos'))
     
@@ -353,6 +373,7 @@ def editar_medico(id):
             db.session.add(me)
         
         db.session.commit()
+        audit('editar', 'medicos', medico.id, descripcion=f'Médico actualizado: {medico.nombre} {medico.apellido}')
         flash('Médico actualizado exitosamente', 'success')
         return redirect(url_for('rrhh.listar_medicos'))
     
@@ -416,6 +437,7 @@ def crear_horario(medico_id):
         db.session.commit()
         
         dias_nombres = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+        audit('crear', 'horarios_atencion', horario.id, descripcion=f'Horario creado: {dias_nombres[dia_semana]} {hora_inicio}-{hora_fin} para {medico.nombre}')
         flash(f'Horario para {dias_nombres[dia_semana]} creado exitosamente', 'success')
         return redirect(url_for('rrhh.listar_horarios', medico_id=medico_id))
     
@@ -450,6 +472,7 @@ def editar_horario(id):
         
         db.session.commit()
         
+        audit('editar', 'horarios_atencion', horario.id, descripcion=f'Horario actualizado: {hora_inicio}-{hora_fin}')
         flash('Horario actualizado exitosamente', 'success')
         return redirect(url_for('rrhh.listar_horarios', medico_id=horario.medico_id))
     
@@ -465,5 +488,6 @@ def eliminar_horario(id):
     db.session.delete(horario)
     db.session.commit()
     
+    audit('eliminar', 'horarios_atencion', horario.id, descripcion=f'Horario eliminado para el médico {horario.medico.nombre}')
     flash('Horario eliminado exitosamente', 'success')
     return redirect(url_for('rrhh.listar_horarios', medico_id=medico_id))

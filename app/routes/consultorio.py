@@ -5,6 +5,7 @@ from app.models import (Consulta, Cita, Paciente, Insumo, Procedimiento, Receta,
                         ConsultaInsumo, ConsultaProcedimiento, OrdenEstudio,
                         InsumoEspecialidad, MovimientoInsumo,
                         ProcedimientoPrecio, Medico, Especialidad, MedicoEspecialidad)
+from app.utils.auditoria import audit
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 import io
@@ -14,7 +15,7 @@ import os
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
-from reportlab.lib.units import mm
+from reportlab.lib.units import mm, inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
@@ -409,6 +410,9 @@ def nueva_consulta(cita_id):
         cita.estado = 'atendida'
         
         db.session.commit()
+        
+        # Auditar creación de consulta
+        audit('crear', 'consultas', consulta.id, descripcion=f'Nueva consulta - {consulta.paciente.nombre} ({consulta.especialidad.nombre})')
 
         # Crear/actualizar venta pendiente para que la cajera la facture
         try:
@@ -1029,6 +1033,7 @@ def eliminar_precio(id):
     pp = ProcedimientoPrecio.query.get_or_404(id)
     db.session.delete(pp)
     db.session.commit()
+    audit('eliminar', 'procedimiento_precios', pp.id, descripcion=f'Precio de procedimiento eliminado: {pp.procedimiento.nombre}')
     flash('Precio eliminado', 'success')
     return redirect(url_for('consultorio.gestionar_precios'))
 
@@ -1082,6 +1087,7 @@ def nuevo_insumo():
         )
         db.session.add(insumo)
         db.session.commit()
+        audit('crear', 'insumos', insumo.id, descripcion=f'Insumo creado: {insumo.nombre} (Stock: {insumo.cantidad_actual} {insumo.unidad_medida})')
         flash('Insumo creado correctamente', 'success')
         return redirect(url_for('consultorio.listar_insumos'))
 
@@ -1122,6 +1128,7 @@ def editar_insumo(id):
         insumo.activo = True if request.form.get('activo') == 'on' else False
 
         db.session.commit()
+        audit('editar', 'insumos', insumo.id, descripcion=f'Insumo actualizado: {insumo.nombre}')
         flash('Insumo actualizado correctamente', 'success')
         return redirect(url_for('consultorio.listar_insumos'))
 

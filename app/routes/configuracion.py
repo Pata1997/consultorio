@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app import db
-from app.models import ConfiguracionConsultorio, Especialidad
+from app.models import ConfiguracionConsultorio, Especialidad, AuditLog
+from app.utils.auditoria import audit
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
@@ -80,6 +81,7 @@ def editar_configuracion():
         
         db.session.commit()
         
+        audit('editar', 'configuracion', config.id, descripcion=f'Configuración del consultorio actualizada: {config.nombre}')
         flash('Configuración actualizada exitosamente', 'success')
         return redirect(url_for('configuracion.ver_configuracion'))
     
@@ -118,6 +120,7 @@ def crear_especialidad():
             
             db.session.add(nueva_especialidad)
             db.session.commit()
+            audit('crear', 'especialidades', nueva_especialidad.id, descripcion=f'Especialidad creada: {nueva_especialidad.nombre} (Precio: ${nueva_especialidad.precio_consulta})')
             flash('Especialidad creada exitosamente', 'success')
             return redirect(url_for('configuracion.listar_especialidades'))
             
@@ -148,6 +151,7 @@ def editar_especialidad(id):
             especialidad.activo = request.form.get('activo') == 'on'
             
             db.session.commit()
+            audit('editar', 'especialidades', especialidad.id, descripcion=f'Especialidad actualizada: {especialidad.nombre}')
             flash('Especialidad actualizada exitosamente', 'success')
             return redirect(url_for('configuracion.listar_especialidades'))
             
@@ -156,3 +160,84 @@ def editar_especialidad(id):
             flash(f'Error al actualizar especialidad: {str(e)}', 'danger')
     
     return render_template('configuracion/editar_especialidad.html', especialidad=especialidad)
+
+@bp.route('/bitacora')
+@login_required
+def bitacora():
+    """Ver bitácora del sistema (solo admin)"""
+    if current_user.rol != 'admin':
+        flash('No tienes permisos para acceder a esta sección', 'danger')
+        return redirect(url_for('main.index'))
+    
+    from datetime import date, timedelta
+    
+    # Parámetros de filtro
+    page = request.args.get('page', 1, type=int)
+    fecha_inicio_str = request.args.get('fecha_inicio', '')
+    fecha_fin_str = request.args.get('fecha_fin', '')
+    usuario_id = request.args.get('usuario_id', type=int)
+    accion = request.args.get('accion', '')
+    tabla = request.args.get('tabla', '')
+    
+    # Construcción de query
+    query = AuditLog.query
+    
+    if fecha_inicio_str:
+        try:
+            fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
+            query = query.filter(AuditLog.timestamp >= fecha_inicio)
+        except:
+            pass
+    
+    if fecha_fin_str:
+        try:
+            fecha_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d')
+            fecha_fin = fecha_fin.replace(hour=23, minute=59, second=59)
+            query = query.filter(AuditLog.timestamp <= fecha_fin)
+        except:
+            pass
+    
+    if usuario_id:
+        query = query.filter_by(usuario_id=usuario_id)
+    
+    if accion:
+        query = query.filter_by(accion=accion)
+    
+    if tabla:
+        query = query.filter_by(tabla=tabla)
+    
+    # Ordenar por fecha descendente y paginar
+    total = query.count()
+    per_page = 20
+    total_pages = (total + per_page - 1) // per_page
+    
+    logs = query.order_by(AuditLog.timestamp.desc()).paginate(page=page, per_page=per_page).items
+    
+    # Obtener lista de usuarios para el filtro
+    usuarios = db.session.query(db.func.distinct(AuditLog.usuario_id)).all()
+    usuarios_list = []
+    for (uid,) in usuarios:
+        user = db.session.query(db.text("*")).from_statement(
+            db.text("SELECT * FROM usuarios WHERE id = :id")
+        ).params(id=uid).first()
+        if user:
+            usuarios_list.append(user)
+    
+    # Obtener usuarios de manera más simple
+    from app.models import Usuario
+    usuarios_set = set()
+    for log in AuditLog.query.with_entities(AuditLog.usuario_id).distinct():
+        usuarios_set.add(log[0])
+    
+    usuarios_list = Usuario.query.filter(Usuario.id.in_(usuarios_set)).all()
+    
+    return render_template('configuracion/bitacora.html',
+                         logs=logs,
+                         page=page,
+                         total_pages=total_pages,
+                         fecha_inicio=fecha_inicio_str,
+                         fecha_fin=fecha_fin_str,
+                         usuario_id=usuario_id,
+                         accion=accion,
+                         tabla=tabla,
+                         usuarios=usuarios_list)

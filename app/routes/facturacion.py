@@ -4,6 +4,7 @@ from app import db
 from app.models import (Caja, Venta, VentaDetalle, Pago, FormaPago, Consulta,
                         ConsultaInsumo, ConsultaProcedimiento, Especialidad,
                         ConfiguracionConsultorio)
+from app.utils.auditoria import audit
 from datetime import datetime, date
 import traceback
 from sqlalchemy import func
@@ -88,6 +89,9 @@ def abrir_caja():
     db.session.add(caja)
     db.session.commit()
     
+    # Auditar apertura de caja
+    audit('crear', 'cajas', caja.id, descripcion=f'Caja abierta - Monto inicial: {monto_inicial}')
+    
     flash('Caja abierta exitosamente', 'success')
     return redirect(url_for('facturacion.estado_caja'))
 
@@ -116,6 +120,9 @@ def cerrar_caja():
     caja.observaciones = request.form.get('observaciones', '')
     
     db.session.commit()
+    
+    # Auditar cierre de caja
+    audit('editar', 'cajas', caja.id, descripcion=f'Caja cerrada - Monto final: {monto_final}')
     
     flash('Caja cerrada exitosamente', 'success')
     return redirect(url_for('facturacion.arqueo_caja', id=caja.id))
@@ -581,6 +588,9 @@ def procesar_factura(consulta_id):
                 pass
 
             db.session.commit()
+            
+            # Auditar creación/actualización de venta
+            audit('crear', 'ventas', venta.id, descripcion=f'Venta #{venta.numero_factura} - Total: {venta.total}')
 
             try:
                 current_app.logger.debug(f"[procesar_factura] Commit successful for venta id={venta.id}")

@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.models import Cita, Paciente, Medico, Especialidad, MedicoEspecialidad, HorarioAtencion, Vacacion, Permiso
 from app.utils.rrhh_utils import medico_disponible_en_fecha
+from app.utils.auditoria import audit
 from datetime import datetime, date, time, timedelta
 from sqlalchemy import and_, or_, func
 
@@ -50,6 +51,9 @@ def confirmar_cita(id):
     cita.fecha_confirmacion = datetime.utcnow()
     db.session.commit()
     
+    # Auditar confirmación
+    audit('aprobar', 'citas', cita.id, descripcion=f'Cita confirmada - {cita.paciente.nombre} con Dr. {cita.medico.nombre}')
+    
     flash('Cita confirmada exitosamente', 'success')
     return redirect(url_for('agendamiento.listar_citas'))
 
@@ -91,6 +95,9 @@ def editar_cita(id):
         
         db.session.commit()
         
+        # Auditar edición
+        audit('editar', 'citas', cita.id, descripcion=f'Cita modificada - {cita.fecha} {cita.hora}')
+        
         flash('Cita actualizada exitosamente', 'success')
         return redirect(url_for('agendamiento.listar_citas'))
     
@@ -115,6 +122,9 @@ def cancelar_cita(id):
         cita.estado = 'cancelada'
         cita.observaciones = request.form.get('observaciones', 'Cita cancelada')
     db.session.commit()
+    
+    # Auditar cancelación
+    audit('eliminar', 'citas', cita.id, descripcion=f'Cita cancelada - {cita.paciente.nombre}')
     
     flash('Cita cancelada exitosamente', 'info')
     return redirect(url_for('agendamiento.listar_citas'))
@@ -224,173 +234,195 @@ def nueva_cita():
 @login_required
 def disponibilidad_semanal(medico_id):
     """API para obtener disponibilidad semanal del médico"""
-    from datetime import timedelta
-    
-    # Obtener fecha inicial (lunes de la semana solicitada)
-    fecha_str = request.args.get('fecha', date.today().isoformat())
-    fecha_base = datetime.strptime(fecha_str, '%Y-%m-%d').date()
-    
-    # Calcular el lunes de esa semana
-    dias_desde_lunes = fecha_base.weekday()
-    lunes = fecha_base - timedelta(days=dias_desde_lunes)
-    
-    # Generar 7 días desde el lunes
-    dias_semana = [lunes + timedelta(days=i) for i in range(7)]
-    
-    # Obtener horarios del médico
-    horarios = HorarioAtencion.query.filter_by(
-        medico_id=medico_id,
-        activo=True
-    ).all()
-    
-    # Crear diccionario de horarios por día (usando número de día 0-6)
-    horarios_por_dia = {}
-    for h in horarios:
-        if h.dia_semana not in horarios_por_dia:
-            horarios_por_dia[h.dia_semana] = []
-        horarios_por_dia[h.dia_semana].append({
-            'hora_inicio': h.hora_inicio,
-            'hora_fin': h.hora_fin
-        })
-    
-    # Obtener vacaciones del médico
-    medico = Medico.query.get_or_404(medico_id)
-    vacaciones = Vacacion.query.filter(
-        Vacacion.usuario_id == medico.usuario_id,
-        Vacacion.estado == 'aprobada',
-        Vacacion.fecha_inicio <= dias_semana[-1],
-        Vacacion.fecha_fin >= dias_semana[0]
-    ).all()
-    
-    # Obtener permisos del médico
-    permisos = Permiso.query.filter(
-        Permiso.usuario_id == medico.usuario_id,
-        Permiso.estado == 'aprobado',
-        Permiso.fecha.in_(dias_semana)
-    ).all()
-    
-    # Obtener citas confirmadas
-    citas = Cita.query.filter(
-        Cita.medico_id == medico_id,
-        Cita.fecha.in_(dias_semana),
-        Cita.estado.in_(['pendiente', 'confirmada'])
-    ).all()
-    
-    # Construir estructura de datos
-    dias_espanol = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM']
-    calendario = []
-    hoy = date.today()
-    
-    for fecha in dias_semana:
-        dia_numero = fecha.weekday()  # 0=Lunes, 6=Domingo
-        dia_label = f"{dias_espanol[dia_numero]} {fecha.day}"
-        es_pasado = fecha < hoy
+    try:
+        from datetime import timedelta
         
-        # Verificar si el médico trabaja este día
-        if dia_numero not in horarios_por_dia:
-            calendario.append({
-                'fecha': fecha.isoformat(),
-                'dia_semana': dia_label,
-                'trabaja': False,
-                'es_pasado': es_pasado,
-                'slots': []
+        # Validar que el médico exista
+        medico = Medico.query.get(medico_id)
+        if not medico:
+            return jsonify({'error': f'Médico con ID {medico_id} no encontrado'}), 404
+        
+        # Obtener fecha inicial (lunes de la semana solicitada)
+        fecha_str = request.args.get('fecha', date.today().isoformat())
+        fecha_base = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        
+        # Calcular el lunes de esa semana
+        dias_desde_lunes = fecha_base.weekday()
+        lunes = fecha_base - timedelta(days=dias_desde_lunes)
+        
+        # Generar 7 días desde el lunes
+        dias_semana = [lunes + timedelta(days=i) for i in range(7)]
+        
+        # Obtener horarios del médico
+        horarios = HorarioAtencion.query.filter_by(
+            medico_id=medico_id,
+            activo=True
+        ).all()
+        
+        # Crear diccionario de horarios por día (usando número de día 0-6)
+        horarios_por_dia = {}
+        for h in horarios:
+            if h.dia_semana not in horarios_por_dia:
+                horarios_por_dia[h.dia_semana] = []
+            horarios_por_dia[h.dia_semana].append({
+                'hora_inicio': h.hora_inicio,
+                'hora_fin': h.hora_fin
             })
-            continue
         
-        # Verificar vacaciones
-        en_vacaciones = any(
-            v.fecha_inicio <= fecha <= v.fecha_fin
-            for v in vacaciones
-        )
+        # Obtener vacaciones del médico
+        vacaciones = Vacacion.query.filter(
+            Vacacion.usuario_id == medico.usuario_id,
+            Vacacion.estado == 'aprobada',
+            Vacacion.fecha_inicio <= dias_semana[-1],
+            Vacacion.fecha_fin >= dias_semana[0]
+        ).all()
         
-        if en_vacaciones:
+        # Obtener permisos del médico
+        permisos = Permiso.query.filter(
+            Permiso.usuario_id == medico.usuario_id,
+            Permiso.estado == 'aprobado',
+            Permiso.fecha.in_(dias_semana)
+        ).all()
+        
+        # Obtener citas confirmadas
+        citas = Cita.query.filter(
+            Cita.medico_id == medico_id,
+            Cita.fecha.in_(dias_semana),
+            Cita.estado.in_(['pendiente', 'confirmada'])
+        ).all()
+        
+        # Construir estructura de datos
+        dias_espanol = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM']
+        calendario = []
+        hoy = date.today()
+        
+        for fecha in dias_semana:
+            dia_numero = fecha.weekday()  # 0=Lunes, 6=Domingo
+            dia_label = f"{dias_espanol[dia_numero]} {fecha.day}"
+            es_pasado = fecha < hoy
+            
+            # Verificar si el médico trabaja este día
+            if dia_numero not in horarios_por_dia:
+                calendario.append({
+                    'fecha': fecha.isoformat(),
+                    'dia_semana': dia_label,
+                    'trabaja': False,
+                    'es_pasado': es_pasado,
+                    'slots': []
+                })
+                continue
+            
+            # Verificar vacaciones
+            en_vacaciones = any(
+                v.fecha_inicio <= fecha <= v.fecha_fin
+                for v in vacaciones
+            )
+            
+            if en_vacaciones:
+                calendario.append({
+                    'fecha': fecha.isoformat(),
+                    'dia_semana': dia_label,
+                    'trabaja': True,
+                    'en_vacaciones': True,
+                    'es_pasado': es_pasado,
+                    'slots': []
+                })
+                continue
+            
+            # Generar slots de 30 minutos para todos los horarios del día
+            slots = []
+            for horario in horarios_por_dia[dia_numero]:
+                hora_inicio = horario['hora_inicio']
+                hora_fin = horario['hora_fin']
+                
+                # Validar que hora_inicio y hora_fin no sean None
+                if hora_inicio is None or hora_fin is None:
+                    continue
+                
+                hora_actual = datetime.combine(fecha, hora_inicio)
+                hora_fin_dt = datetime.combine(fecha, hora_fin)
+                
+                while hora_actual < hora_fin_dt:
+                    hora_str = hora_actual.strftime('%H:%M')
+                    
+                    # Verificar si el slot es pasado
+                    ahora = datetime.now()
+                    slot_pasado = (fecha < hoy) or (fecha == hoy and hora_actual.time() < ahora.time())
+                    
+                    # Verificar si hay permiso en este horario
+                    tiene_permiso = False
+                    for p in permisos:
+                        if p.fecha != fecha:
+                            continue
+                        # Si el permiso no tiene hora específica, ocupa todo el día
+                        if p.hora_inicio is None or p.hora_fin is None:
+                            tiene_permiso = True
+                            break
+                        # Si tiene horas específicas, verificar si intersectan
+                        if p.hora_inicio <= hora_actual.time() < p.hora_fin:
+                            tiene_permiso = True
+                            break
+                    
+                    # Verificar si hay cita
+                    tiene_cita = any(
+                        c.fecha == fecha and c.hora == hora_actual.time()
+                        for c in citas
+                    )
+                    
+                    # Determinar estado del slot
+                    if slot_pasado:
+                        estado = 'pasado'
+                    elif tiene_permiso:
+                        estado = 'permiso'
+                    elif tiene_cita:
+                        estado = 'ocupado'
+                    else:
+                        estado = 'disponible'
+                    
+                    slots.append({
+                        'hora': hora_str,
+                        'estado': estado
+                    })
+                    
+                    hora_actual += timedelta(minutes=30)
+            
             calendario.append({
                 'fecha': fecha.isoformat(),
                 'dia_semana': dia_label,
                 'trabaja': True,
-                'en_vacaciones': True,
+                'en_vacaciones': False,
                 'es_pasado': es_pasado,
-                'slots': []
+                'slots': slots
             })
-            continue
         
-        # Generar slots de 30 minutos para todos los horarios del día
-        slots = []
-        for horario in horarios_por_dia[dia_numero]:
-            hora_inicio = horario['hora_inicio']
-            hora_fin = horario['hora_fin']
-            
-            hora_actual = datetime.combine(fecha, hora_inicio)
-            hora_fin_dt = datetime.combine(fecha, hora_fin)
-            
-            while hora_actual < hora_fin_dt:
-                hora_str = hora_actual.strftime('%H:%M')
-                
-                # Verificar si el slot es pasado
-                ahora = datetime.now()
-                slot_pasado = (fecha < hoy) or (fecha == hoy and hora_actual.time() < ahora.time())
-                
-                # Verificar si hay permiso en este horario
-                tiene_permiso = any(
-                    p.fecha == fecha and 
-                    p.hora_inicio <= hora_actual.time() < p.hora_fin
-                    for p in permisos
-                )
-                
-                # Verificar si hay cita
-                tiene_cita = any(
-                    c.fecha == fecha and c.hora == hora_actual.time()
-                    for c in citas
-                )
-                
-                # Determinar estado del slot
-                if slot_pasado:
-                    estado = 'pasado'
-                elif tiene_permiso:
-                    estado = 'permiso'
-                elif tiene_cita:
-                    estado = 'ocupado'
-                else:
-                    estado = 'disponible'
-                
-                slots.append({
-                    'hora': hora_str,
-                    'estado': estado
-                })
-                
-                hora_actual += timedelta(minutes=30)
+        # Información del mes para mostrar
+        meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+        mes_inicio = meses[lunes.month - 1]
+        mes_fin = meses[dias_semana[-1].month - 1]
         
-        calendario.append({
-            'fecha': fecha.isoformat(),
-            'dia_semana': dia_label,
-            'trabaja': True,
-            'en_vacaciones': False,
-            'es_pasado': es_pasado,
-            'slots': slots
+        # Formato del período
+        if lunes.month == dias_semana[-1].month:
+            periodo = f"{mes_inicio} {lunes.year}"
+        else:
+            periodo = f"{mes_inicio} - {mes_fin} {lunes.year}"
+        
+        return jsonify({
+            'medico': {
+                'id': medico.id,
+                'nombre': f"Dr(a). {medico.usuario.username}" if medico.usuario else "Doctor"
+            },
+            'semana_inicio': lunes.isoformat(),
+            'semana_fin': dias_semana[-1].isoformat(),
+            'periodo': periodo,
+            'calendario': calendario
         })
-    
-    # Información del mes para mostrar
-    meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
-             'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-    mes_inicio = meses[lunes.month - 1]
-    mes_fin = meses[dias_semana[-1].month - 1]
-    
-    # Formato del período
-    if lunes.month == dias_semana[-1].month:
-        periodo = f"{mes_inicio} {lunes.year}"
-    else:
-        periodo = f"{mes_inicio} - {mes_fin} {lunes.year}"
-    
-    return jsonify({
-        'medico': {
-            'id': medico.id,
-            'nombre': f"Dr(a). {medico.usuario.username}" if medico.usuario else "Doctor"
-        },
-        'semana_inicio': lunes.isoformat(),
-        'semana_fin': dias_semana[-1].isoformat(),
-        'periodo': periodo,
-        'calendario': calendario
-    })
+    except Exception as e:
+        import traceback
+        error_msg = str(e)
+        print(f"Error en disponibilidad_semanal: {error_msg}")
+        traceback.print_exc()
+        return jsonify({'error': error_msg}), 500
 
 @bp.route('/api/buscar-pacientes')
 @login_required
@@ -485,45 +517,51 @@ def buscar_especialidades():
 @login_required
 def medicos_por_especialidad(especialidad_id):
     """API: Obtener médicos disponibles por especialidad"""
-    fecha_str = request.args.get('fecha', date.today().isoformat())
-    fecha_consulta = datetime.strptime(fecha_str, '%Y-%m-%d').date()
-    
-    # Buscar médicos de la especialidad
-    medicos_especialidad = MedicoEspecialidad.query.filter_by(
-        especialidad_id=especialidad_id
-    ).all()
-    
-    medicos_disponibles = []
-    medicos_no_disponibles = []
-    
-    for me in medicos_especialidad:
-        medico = me.medico
+    try:
+        fecha_str = request.args.get('fecha', date.today().isoformat())
+        fecha_consulta = datetime.strptime(fecha_str, '%Y-%m-%d').date()
         
-        # Verificar que esté activo
-        if not medico.activo:
-            continue
+        # Buscar médicos de la especialidad
+        medicos_especialidad = MedicoEspecialidad.query.filter_by(
+            especialidad_id=especialidad_id
+        ).all()
         
-        # Verificar disponibilidad (vacaciones/permisos) - sin horario específico
-        disponible, motivo = medico_disponible_en_fecha(
-            medico.id, fecha_consulta, None, None
-        )
+        medicos_disponibles = []
+        medicos_no_disponibles = []
         
-        medico_info = {
-            'id': medico.id,
-            'nombre': medico.nombre_completo,
-            'registro': medico.registro_profesional
-        }
+        for me in medicos_especialidad:
+            medico = me.medico
+            
+            # Verificar que esté activo
+            if not medico.activo:
+                continue
+            
+            # Verificar disponibilidad (vacaciones/permisos) - sin horario específico
+            disponible, motivo = medico_disponible_en_fecha(
+                medico.id, fecha_consulta, None, None
+            )
+            
+            medico_info = {
+                'id': medico.id,
+                'nombre': medico.nombre_completo,
+                'registro': medico.registro_profesional
+            }
+            
+            if disponible:
+                medicos_disponibles.append(medico_info)
+            else:
+                medico_info['motivo_no_disponible'] = motivo
+                medicos_no_disponibles.append(medico_info)
         
-        if disponible:
-            medicos_disponibles.append(medico_info)
-        else:
-            medico_info['motivo_no_disponible'] = motivo
-            medicos_no_disponibles.append(medico_info)
-    
-    return jsonify({
-        'disponibles': medicos_disponibles,
-        'no_disponibles': medicos_no_disponibles
-    })
+        return jsonify({
+            'disponibles': medicos_disponibles,
+            'no_disponibles': medicos_no_disponibles
+        })
+    except Exception as e:
+        import traceback
+        print(f"Error en medicos_por_especialidad: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 @bp.route('/api/horarios-disponibles/<int:medico_id>')
 @login_required
@@ -642,6 +680,7 @@ def nuevo_paciente():
         db.session.add(paciente)
         db.session.commit()
         
+        audit('crear', 'pacientes', paciente.id, descripcion=f'Paciente registrado: {paciente.nombre} {paciente.apellido} (Cédula: {paciente.cedula})')
         flash('Paciente registrado exitosamente', 'success')
         return redirect(url_for('agendamiento.listar_pacientes'))
     
@@ -670,6 +709,7 @@ def editar_paciente(id):
 
         db.session.commit()
 
+        audit('editar', 'pacientes', paciente.id, descripcion=f'Paciente actualizado: {paciente.nombre} {paciente.apellido}')
         flash('Paciente actualizado exitosamente', 'success')
         return redirect(url_for('agendamiento.listar_pacientes'))
     

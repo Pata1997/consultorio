@@ -59,7 +59,11 @@
                         </a>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_vacaciones') }}"><i class="bi bi-calendar-x"></i> Mis Vacaciones</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.solicitar_vacacion') }}"><i class="bi bi-plus-circle"></i> Solicitar Vacaciones</a></li>
+                            <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_permisos') }}"><i class="bi bi-clock"></i> Mis Permisos</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.solicitar_permiso') }}"><i class="bi bi-plus-circle"></i> Solicitar Permiso</a></li>
+                            <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_asistencias') }}"><i class="bi bi-person-check"></i> Mi Asistencia</a></li>
                         </ul>
                     </li>
@@ -136,6 +140,12 @@
                         </a>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_asistencias') }}"><i class="bi bi-person-check"></i> Mi Asistencia</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_vacaciones') }}"><i class="bi bi-calendar-x"></i> Mis Vacaciones</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.solicitar_vacacion') }}"><i class="bi bi-plus-circle"></i> Solicitar Vacaciones</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_permisos') }}"><i class="bi bi-clock"></i> Mis Permisos</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('rrhh.solicitar_permiso') }}"><i class="bi bi-plus-circle"></i> Solicitar Permiso</a></li>
                         </ul>
                     </li>
                     {% endif %}
@@ -161,6 +171,14 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('configuracion.ver_configuracion') }}">
                             <i class="bi bi-gear"></i> Configuración
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% if current_user.rol == 'admin' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('configuracion.bitacora') }}">
+                            <i class="bi bi-book"></i> Bitácora
                         </a>
                     </li>
                     {% endif %}
