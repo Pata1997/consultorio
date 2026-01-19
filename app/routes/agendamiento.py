@@ -258,7 +258,10 @@ def disponibilidad_semanal(medico_id):
             medico_id=medico_id,
             activo=True
         ).all()
-        
+        print(f"[DEBUG] Horarios activos para médico {medico_id} ({medico.nombre}):")
+        for h in horarios:
+            print(f"  Día: {h.dia_semana} | {h.hora_inicio} - {h.hora_fin} | Duración: {h.duracion_consulta}")
+
         # Crear diccionario de horarios por día (usando número de día 0-6)
         horarios_por_dia = {}
         for h in horarios:
@@ -268,6 +271,7 @@ def disponibilidad_semanal(medico_id):
                 'hora_inicio': h.hora_inicio,
                 'hora_fin': h.hora_fin
             })
+        print(f"[DEBUG] Días de la semana generados: {[d.strftime('%Y-%m-%d (%A)') for d in dias_semana]}")
         
         # Obtener vacaciones del médico
         vacaciones = Vacacion.query.filter(
@@ -334,21 +338,25 @@ def disponibilidad_semanal(medico_id):
             for horario in horarios_por_dia[dia_numero]:
                 hora_inicio = horario['hora_inicio']
                 hora_fin = horario['hora_fin']
-                
+                # Buscar el objeto HorarioAtencion para obtener la duración real
+                horario_obj = HorarioAtencion.query.filter_by(
+                    medico_id=medico_id,
+                    dia_semana=dia_numero,
+                    hora_inicio=hora_inicio,
+                    hora_fin=hora_fin,
+                    activo=True
+                ).first()
+                duracion = horario_obj.duracion_consulta if horario_obj else 30
                 # Validar que hora_inicio y hora_fin no sean None
                 if hora_inicio is None or hora_fin is None:
                     continue
-                
                 hora_actual = datetime.combine(fecha, hora_inicio)
                 hora_fin_dt = datetime.combine(fecha, hora_fin)
-                
                 while hora_actual < hora_fin_dt:
                     hora_str = hora_actual.strftime('%H:%M')
-                    
                     # Verificar si el slot es pasado
                     ahora = datetime.now()
                     slot_pasado = (fecha < hoy) or (fecha == hoy and hora_actual.time() < ahora.time())
-                    
                     # Verificar si hay permiso en este horario
                     tiene_permiso = False
                     for p in permisos:
@@ -362,13 +370,11 @@ def disponibilidad_semanal(medico_id):
                         if p.hora_inicio <= hora_actual.time() < p.hora_fin:
                             tiene_permiso = True
                             break
-                    
                     # Verificar si hay cita
                     tiene_cita = any(
                         c.fecha == fecha and c.hora == hora_actual.time()
                         for c in citas
                     )
-                    
                     # Determinar estado del slot
                     if slot_pasado:
                         estado = 'pasado'
@@ -378,13 +384,11 @@ def disponibilidad_semanal(medico_id):
                         estado = 'ocupado'
                     else:
                         estado = 'disponible'
-                    
                     slots.append({
                         'hora': hora_str,
                         'estado': estado
                     })
-                    
-                    hora_actual += timedelta(minutes=30)
+                    hora_actual += timedelta(minutes=duracion)
             
             calendario.append({
                 'fecha': fecha.isoformat(),
