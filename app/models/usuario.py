@@ -128,12 +128,13 @@ class Medico(db.Model):
 class MedicoEspecialidad(db.Model):
     """Relación entre médicos y especialidades"""
     __tablename__ = 'medico_especialidades'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     medico_id = db.Column(db.Integer, db.ForeignKey('medicos.id'), nullable=False)
     especialidad_id = db.Column(db.Integer, db.ForeignKey('especialidades.id'), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     fecha_asignacion = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     def __repr__(self):
         return f'<MedicoEspecialidad M:{self.medico_id} E:{self.especialidad_id}>'
 

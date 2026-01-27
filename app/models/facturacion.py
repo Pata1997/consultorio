@@ -84,13 +84,14 @@ class VentaDetalle(db.Model):
 class FormaPago(db.Model):
     """Formas de pago disponibles"""
     __tablename__ = 'formas_pago'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(50), unique=True, nullable=False)  # efectivo, tarjeta_debito, tarjeta_credito, cheque, transferencia
     descripcion = db.Column(db.Text)
     activo = db.Column(db.Boolean, default=True)
     requiere_referencia = db.Column(db.Boolean, default=False)
-    
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+
     def __repr__(self):
         return f'<FormaPago {self.nombre}>'
 

@@ -4,6 +4,7 @@ from datetime import datetime
 class ConfiguracionConsultorio(db.Model):
     """Configuración general del consultorio"""
     __tablename__ = 'configuracion_consultorio'
+    consultorio_id = db.Column(db.Integer, nullable=True)
     
     id = db.Column(db.Integer, primary_key=True)
     

@@ -120,6 +120,8 @@ class Insumo(db.Model):
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relaciones
+    especialidad_id = db.Column(db.Integer, db.ForeignKey('especialidades.id'), nullable=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     especialidades = db.relationship('InsumoEspecialidad', backref='insumo', lazy=True)
     movimientos = db.relationship('MovimientoInsumo', backref='insumo', lazy=True)
     
@@ -194,15 +196,16 @@ class MovimientoInsumo(db.Model):
 class Procedimiento(db.Model):
     """Modelo para procedimientos médicos"""
     __tablename__ = 'procedimientos'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     especialidad_id = db.Column(db.Integer, db.ForeignKey('especialidades.id'), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     nombre = db.Column(db.String(200), nullable=False)
     descripcion = db.Column(db.Text)
     precio = db.Column(db.Numeric(10, 2), nullable=False)
     activo = db.Column(db.Boolean, default=True)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     def __repr__(self):
         return f'<Procedimiento {self.nombre}>'
 
