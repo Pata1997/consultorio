@@ -452,28 +452,32 @@ function mostrarCalendario(data) {
     
     html += '</tr></thead><tbody>';
     
-    // Obtener todas las horas únicas
-    const horasSet = new Set();
-    data.calendario.forEach(dia => {
-        dia.slots.forEach(slot => horasSet.add(slot.hora));
-    });
-    const horas = Array.from(horasSet).sort();
-    
-    // Construir filas por hora
-    horas.forEach(hora => {
-        html += `<tr><td class="hora-label">${hora}</td>`;
-        
+    // Mostrar solo los slots reales de cada día (no una lista fija de horas)
+    // Para cada día, mostrar sus slots en una columna, alineando por fila (slot 1 de cada día, slot 2 de cada día, etc.)
+    // Calcular el máximo número de slots en cualquier día
+    const maxSlots = Math.max(...data.calendario.map(dia => dia.slots.length));
+    for (let i = 0; i < maxSlots; i++) {
+        html += '<tr>';
+        // Primera columna: hora (si existe en algún día)
+        let horaLabel = '';
+        for (let d = 0; d < data.calendario.length; d++) {
+            if (data.calendario[d].slots[i]) {
+                horaLabel = data.calendario[d].slots[i].hora;
+                break;
+            }
+        }
+        html += `<td class="hora-label">${horaLabel}</td>`;
+        // Ahora, para cada día, mostrar el slot correspondiente
         data.calendario.forEach(dia => {
             if (!dia.trabaja) {
                 html += '<td><div class="slot no-labora">-</div></td>';
             } else if (dia.en_vacaciones) {
                 html += '<td><div class="slot vacacion">🏖️</div></td>';
             } else {
-                const slot = dia.slots.find(s => s.hora === hora);
+                const slot = dia.slots[i];
                 if (slot) {
                     let claseEstado = slot.estado;
                     let texto = '';
-                    
                     if (slot.estado === 'disponible') {
                         texto = '✓';
                     } else if (slot.estado === 'ocupado') {
@@ -486,19 +490,17 @@ function mostrarCalendario(data) {
                         texto = '-';
                         claseEstado = 'pasado';
                     }
-                    
                     html += `<td><div class="slot ${claseEstado}" 
                                      data-fecha="${dia.fecha}" 
-                                     data-hora="${hora}" 
-                                     onclick="seleccionarSlot(this, '${dia.fecha}', '${hora}', '${slot.estado}')">${texto}</div></td>`;
+                                     data-hora="${slot.hora}" 
+                                     onclick="seleccionarSlot(this, '${dia.fecha}', '${slot.hora}', '${slot.estado}')">${texto}</div></td>`;
                 } else {
                     html += '<td><div class="slot no-labora">-</div></td>';
                 }
             }
         });
-        
         html += '</tr>';
-    });
+    }
     
     html += '</tbody></table>';
     container.innerHTML = html;
