@@ -28,15 +28,32 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="hora_inicio" class="form-label">Hora Inicio *</label>
-                            <input type="time" class="form-control" id="hora_inicio" name="hora_inicio" required>
+                            <input type="time" class="form-control" id="hora_inicio" name="hora_inicio" required lang="es-ES">
                             <small class="text-muted">Ejemplo: 08:00</small>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="hora_fin" class="form-label">Hora Fin *</label>
-                            <input type="time" class="form-control" id="hora_fin" name="hora_fin" required>
+                            <input type="time" class="form-control" id="hora_fin" name="hora_fin" required lang="es-ES">
                             <small class="text-muted">Ejemplo: 12:00</small>
                         </div>
                     </div>
+
+                    <script>
+                        // Forzar formato 24 horas consistente en ambas máquinas
+                        document.getElementById('hora_inicio').addEventListener('change', function() {
+                            if (this.value && this.value.length === 5) {
+                                const [horas, minutos] = this.value.split(':');
+                                this.value = String(horas).padStart(2, '0') + ':' + String(minutos).padStart(2, '0');
+                            }
+                        });
+                        
+                        document.getElementById('hora_fin').addEventListener('change', function() {
+                            if (this.value && this.value.length === 5) {
+                                const [horas, minutos] = this.value.split(':');
+                                this.value = String(horas).padStart(2, '0') + ':' + String(minutos).padStart(2, '0');
+                            }
+                        });
+                    </script>
 
                     <div class="alert alert-warning">
                         <small>
