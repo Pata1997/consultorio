@@ -484,10 +484,11 @@ def eliminar_horario(id):
     """Eliminar horario de atención"""
     horario = HorarioAtencion.query.get_or_404(id)
     medico_id = horario.medico_id
+    medico_nombre = horario.medico.nombre
     
     db.session.delete(horario)
     db.session.commit()
     
-    audit('eliminar', 'horarios_atencion', horario.id, descripcion=f'Horario eliminado para el médico {horario.medico.nombre}')
+    audit('eliminar', 'horarios_atencion', id, descripcion=f'Horario eliminado para el médico {medico_nombre}')
     flash('Horario eliminado exitosamente', 'success')
     return redirect(url_for('rrhh.listar_horarios', medico_id=medico_id))
