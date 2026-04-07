@@ -4,11 +4,12 @@ from app import db
 from app.models import (Consulta, Cita, Paciente, Insumo, Procedimiento, Receta, 
                         ConsultaInsumo, ConsultaProcedimiento, OrdenEstudio,
                         InsumoEspecialidad, MovimientoInsumo,
-                        ProcedimientoPrecio, Medico, Especialidad, MedicoEspecialidad)
+                        ProcedimientoPrecio, Odontograma, Medico, Especialidad, MedicoEspecialidad)
 from app.utils.auditoria import audit
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 import io
+import json
 import os
 
 # ReportLab for PDF generation
@@ -63,6 +64,102 @@ def _resolver_precio_procedimiento(procedimiento_id, medico_id=None, especialida
         return procedimiento.precio
     
     return Decimal('0')
+
+
+def _procesar_procedimientos_odontograma(consulta, odontograma_datos):
+    """Convierte los procedimientos asignados a superficies trabajadas en registros ConsultaProcedimiento."""
+    if not odontograma_datos or not odontograma_datos.get('dientes'):
+        return []
+
+    nuevos_procedimientos = []
+    agregado_por_diente = set()
+
+    for numero_str, datos in odontograma_datos.get('dientes', {}).items():
+        try:
+            numero = int(numero_str)
+        except (TypeError, ValueError):
+            continue
+
+        descripcion_diente = datos.get('descripcion', '').strip()
+        observaciones_base = f'Diente {numero}'
+        if descripcion_diente:
+            observaciones_base += f' - {descripcion_diente}'
+
+        # Procesar superficies trabajadas
+        superficies = datos.get('superficies', {})
+        for sup_nombre, sup_data in superficies.items():
+            if sup_data.get('historico'):
+                continue
+            if not sup_data.get('trabajado') or not sup_data.get('procedimiento_id'):
+                continue
+
+            proc_id = sup_data['procedimiento_id']
+            try:
+                proc_id = int(proc_id)
+            except (TypeError, ValueError):
+                continue
+
+            key = (numero, sup_nombre, proc_id)
+            if key in agregado_por_diente:
+                continue
+
+            procedimiento = Procedimiento.query.get(proc_id)
+            if not procedimiento:
+                continue
+
+            precio_resuelto = _resolver_precio_procedimiento(
+                procedimiento_id=procedimiento.id,
+                medico_id=consulta.medico_id,
+                especialidad_id=consulta.especialidad_id
+            )
+
+            observaciones = f'{observaciones_base} - Superficie {sup_nombre.capitalize()}'
+
+            consulta_proc = ConsultaProcedimiento(
+                consulta_id=consulta.id,
+                procedimiento_id=procedimiento.id,
+                precio=precio_resuelto,
+                observaciones=observaciones
+            )
+            db.session.add(consulta_proc)
+            nuevos_procedimientos.append(consulta_proc)
+            agregado_por_diente.add(key)
+
+        # Compatibilidad con datos antiguos (procedimientos globales)
+        if not superficies and datos.get('trabajado'):
+            procedimientos_diente = datos.get('procedimientos') or []
+            for proc in procedimientos_diente:
+                proc_id = proc.get('id') if isinstance(proc, dict) else proc
+                try:
+                    proc_id = int(proc_id)
+                except (TypeError, ValueError):
+                    continue
+
+                key = (numero, proc_id)
+                if key in agregado_por_diente:
+                    continue
+
+                procedimiento = Procedimiento.query.get(proc_id)
+                if not procedimiento:
+                    continue
+
+                precio_resuelto = _resolver_precio_procedimiento(
+                    procedimiento_id=procedimiento.id,
+                    medico_id=consulta.medico_id,
+                    especialidad_id=consulta.especialidad_id
+                )
+
+                consulta_proc = ConsultaProcedimiento(
+                    consulta_id=consulta.id,
+                    procedimiento_id=procedimiento.id,
+                    precio=precio_resuelto,
+                    observaciones=observaciones_base
+                )
+                db.session.add(consulta_proc)
+                nuevos_procedimientos.append(consulta_proc)
+                agregado_por_diente.add(key)
+
+    return nuevos_procedimientos
 
 
 def _resolve_logo_path(config):
@@ -339,7 +436,22 @@ def nueva_consulta(cita_id):
                 descripcion=orden_texto
             )
             db.session.add(orden)
-        
+
+        # Procesar odontograma enviado desde el formulario
+        odontograma_json = request.form.get('odontograma_json', '').strip()
+        if odontograma_json and odontograma_json not in ('{}', '{ }'):
+            try:
+                datos_odontograma = json.loads(odontograma_json)
+                if datos_odontograma and datos_odontograma.get('dientes'):
+                    odontograma = Odontograma(
+                        consulta_id=consulta.id,
+                        paciente_id=consulta.paciente_id,
+                        datos=datos_odontograma
+                    )
+                    db.session.add(odontograma)
+            except (ValueError, TypeError, json.JSONDecodeError):
+                current_app.logger.warning(f"[nueva_consulta] Odontograma inválido para consulta {consulta.id}")
+
         # Procesar insumos utilizados
         insumo_ids = request.form.getlist('insumo_id[]')
         cantidades = request.form.getlist('insumo_cantidad[]')
@@ -385,7 +497,7 @@ def nueva_consulta(cita_id):
             )
             db.session.add(movimiento)
         
-        # Procesar procedimientos
+        # Procesar procedimientos generales seleccionados
         procedimiento_ids = request.form.getlist('procedimientos[]')
         
         for proc_id in procedimiento_ids:
@@ -405,6 +517,15 @@ def nueva_consulta(cita_id):
                         precio=precio_resuelto
                     )
                     db.session.add(consulta_proc)
+        
+        # Procesar procedimientos desde el odontograma de dientes trabajados
+        odontograma_json = request.form.get('odontograma_json', '').strip()
+        if odontograma_json and odontograma_json not in ('{}', '{ }'):
+            try:
+                datos_odontograma = json.loads(odontograma_json)
+                _procesar_procedimientos_odontograma(consulta, datos_odontograma)
+            except (ValueError, TypeError, json.JSONDecodeError):
+                current_app.logger.warning(f"[nueva_consulta] Odontograma inválido para consulta {consulta.id}")
         
         # Actualizar estado de la cita a atendida
         cita.estado = 'atendida'
@@ -538,26 +659,75 @@ def nueva_consulta(cita_id):
         especialidad_id=cita.especialidad_id,
         activo=True
     ).all()
+
+    # Cargar último odontograma del paciente para historial clínico continuo
+    ultimo_odontograma = Odontograma.query.filter_by(
+        paciente_id=paciente.id
+    ).order_by(Odontograma.fecha.desc()).first()
+    ultimo_odontograma_json = ultimo_odontograma.datos if ultimo_odontograma else {}
     
     return render_template('consultorio/nueva_consulta.html',
                          cita=cita,
                          consultas_previas=consultas_previas,
                          insumos_disponibles=insumos_disponibles,
-                         procedimientos_disponibles=procedimientos_disponibles)
+                         procedimientos_disponibles=procedimientos_disponibles,
+                         ultimo_odontograma_json=ultimo_odontograma_json)
 
 @bp.route('/consultas/<int:id>')
 @login_required
 def ver_consulta(id):
     """Ver detalle de consulta"""
     consulta = Consulta.query.get_or_404(id)
-    
-    # Verificar permisos
-    if current_user.rol == 'medico' and current_user.medico:
-        if consulta.medico_id != current_user.medico.id:
-            flash('No tiene permiso para ver esta consulta', 'danger')
-            return redirect(url_for('main.index'))
-    
-    return render_template('consultorio/ver_consulta.html', consulta=consulta)
+
+    odontograma = None
+    odontograma_summary = None
+    if consulta.odontogramas:
+        odontograma = sorted(consulta.odontogramas, key=lambda o: o.fecha)[-1]
+        datos = odontograma.datos or {}
+        estados = {'evaluado': [], 'terminado': [], 'normal': []}
+        superficies_actuales = []
+        superficies_historicas = []
+        procedimiento_ids = set()
+
+        for numero_str, datos_diente in sorted((datos.get('dientes') or {}).items(), key=lambda x: int(x[0])):
+            estado = (datos_diente or {}).get('estado', 'normal')
+            if estado in estados:
+                estados[estado].append(numero_str)
+            superficies_data = (datos_diente or {}).get('superficies') or {}
+            for sup_nombre, sup_data in superficies_data.items():
+                if not sup_data:
+                    continue
+                es_historico = bool(sup_data.get('historico'))
+                proc_id = sup_data.get('procedimiento_id')
+                if proc_id is None:
+                    continue
+                if sup_data.get('trabajado') or es_historico:
+                    procedimiento_ids.add(proc_id)
+                    target = superficies_historicas if es_historico else superficies_actuales
+                    target.append({
+                        'diente': numero_str,
+                        'superficie': sup_nombre.capitalize(),
+                        'procedimiento_id': proc_id,
+                        'procedimiento_nombre': None,
+                        'historico': es_historico
+                    })
+
+        if procedimiento_ids:
+            procedimientos = {p.id: p.nombre for p in Procedimiento.query.filter(Procedimiento.id.in_(list(procedimiento_ids))).all()}
+            for collection in (superficies_actuales, superficies_historicas):
+                for sup in collection:
+                    sup['procedimiento_nombre'] = procedimientos.get(sup['procedimiento_id'], 'Procedimiento desconocido')
+
+        odontograma_summary = {
+            'fecha': odontograma.fecha,
+            'estados': estados,
+            'superficies_actuales': superficies_actuales,
+            'superficies_historicas': superficies_historicas
+        }
+
+    return render_template('consultorio/ver_consulta.html', consulta=consulta,
+                           odontograma=odontograma,
+                           odontograma_summary=odontograma_summary)
 
 
 @bp.route('/consultas/<int:consulta_id>/receta_pdf/<int:receta_id>')

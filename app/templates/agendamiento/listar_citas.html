@@ -79,6 +79,17 @@
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             {% if cita.estado == 'pendiente' %}
+                                                <button type="button" 
+                                                        class="btn btn-outline-primary btn-reagendar"
+                                                        title="Reagendar"
+                                                        data-cita-id="{{ cita.id }}"
+                                                        data-medico-id="{{ cita.medico.id }}"
+                                                        data-medico-nombre="Dr./Dra. {{ cita.medico.nombre }} {{ cita.medico.apellido }}"
+                                                        data-especialidad-nombre="{{ cita.especialidad.nombre }}"
+                                                        data-fecha="{{ cita.fecha.isoformat() }}"
+                                                        data-hora="{{ cita.hora.strftime('%H:%M') }}">
+                                                    <i class="bi bi-arrow-repeat"></i>
+                                                </button>
                                                 <a href="{{ url_for('agendamiento.confirmar_cita', id=cita.id) }}" 
                                                    class="btn btn-outline-success" 
                                                    title="Confirmar">
@@ -87,7 +98,6 @@
                                             {% endif %}
 
                                             {% if cita.estado in ['pendiente', 'confirmada'] %}
-                                                <!-- Edit action removed intentionally -->
                                 <form method="POST" 
                                     action="{{ url_for('agendamiento.cancelar_cita', id=cita.id) }}" 
                                     style="display: inline;"
@@ -116,4 +126,235 @@
         </div>
     </div>
 </div>
+
+<!-- Modal de Reagendar Cita -->
+<div class="modal fade" id="modalReagendarCita" tabindex="-1" aria-labelledby="modalReagendarCitaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalReagendarCitaLabel"><i class="bi bi-arrow-repeat"></i> Reagendar Cita</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-lg-4">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <p class="mb-1"><strong>Paciente:</strong> <span id="modalPacienteNombre"></span></p>
+                                <p class="mb-1"><strong>Doctor:</strong> <span id="modalDoctorNombre"></span></p>
+                                <p class="mb-1"><strong>Especialidad:</strong> <span id="modalEspecialidadNombre"></span></p>
+                                <p class="mb-1"><strong>Fecha actual:</strong> <span id="modalFechaActual"></span></p>
+                                <p class="mb-1"><strong>Hora actual:</strong> <span id="modalHoraActual"></span></p>
+                                <hr>
+                                <div class="mb-3">
+                                    <label class="form-label">Nueva cita seleccionada</label>
+                                    <div class="border rounded p-3 bg-light" id="modalNuevaSeleccion">
+                                        <div id="modalNuevaFechaHora" class="fw-semibold">Seleccione un horario disponible</div>
+                                        <div id="modalSeleccionMensaje" class="text-muted small"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-8">
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>Disponibilidad del doctor</strong>
+                                        <div class="small text-muted" id="modalPeriodoDisponibilidad"></div>
+                                    </div>
+                                    <div>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnSemanaAnteriorModal"><i class="bi bi-chevron-left"></i></button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnSemanaSiguienteModal"><i class="bi bi-chevron-right"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body" id="modalCalendarioDisponibilidad">
+                                <p class="text-center text-muted">Seleccione un médico para ver su disponibilidad.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" id="btnGuardarReagendado" disabled>
+                    <i class="bi bi-save"></i> Guardar Reagendación
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const modalReagendar = new bootstrap.Modal(document.getElementById('modalReagendarCita'));
+let reagendarCitaId = null;
+let reagendarMedicoId = null;
+let reagendarEspecialidad = null;
+let reagendarFechaBase = new Date();
+let slotSeleccionado = null;
+
+function formatDateDisplay(fecha) {
+    const date = new Date(fecha);
+    return date.toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function abrirModalReagendar(event) {
+    const button = event.currentTarget;
+    reagendarCitaId = button.dataset.citaId;
+    reagendarMedicoId = button.dataset.medicoId;
+    const doctorNombre = button.dataset.medicoNombre;
+    const fechaActual = button.dataset.fecha;
+    const horaActual = button.dataset.hora;
+    const row = button.closest('tr');
+    const pacienteNombre = row.querySelector('td:nth-child(3)').innerText.trim();
+    const especialidadNombre = button.dataset.especialidadNombre || row.querySelector('td:nth-child(5)').innerText.trim();
+
+    document.getElementById('modalPacienteNombre').innerText = pacienteNombre;
+    document.getElementById('modalDoctorNombre').innerText = doctorNombre;
+    document.getElementById('modalEspecialidadNombre').innerText = especialidadNombre;
+    document.getElementById('modalFechaActual').innerText = formatDateDisplay(fechaActual);
+    document.getElementById('modalHoraActual').innerText = horaActual;
+    document.getElementById('modalNuevaFechaHora').innerText = 'Seleccione un horario disponible';
+    document.getElementById('modalSeleccionMensaje').innerText = '';
+    document.getElementById('btnGuardarReagendado').disabled = true;
+    slotSeleccionado = null;
+    reagendarFechaBase = new Date();
+
+    cargarDisponibilidadMedico(reagendarMedicoId, reagendarFechaBase);
+    modalReagendar.show();
+}
+
+function cargarDisponibilidadMedico(medicoId, fechaBase) {
+    const fechaStr = fechaBase.toISOString().split('T')[0];
+    fetch(`/agendamiento/api/disponibilidad-semanal/${medicoId}?fecha=${fechaStr}`)
+        .then(resp => resp.json())
+        .then(data => {
+            if (data.error) {
+                document.getElementById('modalCalendarioDisponibilidad').innerHTML = `<div class="text-danger">${data.error}</div>`;
+                return;
+            }
+            document.getElementById('modalPeriodoDisponibilidad').innerText = data.periodo;
+            renderCalendarioDisponibilidad(data.calendario);
+        })
+        .catch(err => {
+            document.getElementById('modalCalendarioDisponibilidad').innerHTML = `<div class="text-danger">Error cargando disponibilidad.</div>`;
+            console.error(err);
+        });
+}
+
+function renderCalendarioDisponibilidad(calendario) {
+    const container = document.getElementById('modalCalendarioDisponibilidad');
+    container.innerHTML = '';
+
+    const row = document.createElement('div');
+    row.className = 'row gy-3';
+
+    calendario.forEach(dia => {
+        const col = document.createElement('div');
+        col.className = 'col-md-6';
+        col.innerHTML = `
+            <div class="card h-100">
+                <div class="card-header ${dia.es_pasado ? 'bg-light' : dia.trabaja ? 'bg-white' : 'bg-secondary text-white'}">
+                    <strong>${dia.dia_semana}</strong>
+                    ${dia.en_vacaciones ? '<span class="badge bg-warning ms-2">Vacaciones</span>' : ''}
+                </div>
+                <div class="card-body p-2">
+                    <div class="d-flex flex-wrap gap-2" id="slots-${dia.fecha}"></div>
+                </div>
+            </div>
+        `;
+        row.appendChild(col);
+    });
+    container.appendChild(row);
+
+    // populate slots after card elements have been appended
+    calendario.forEach(dia => {
+        const slotContainer = container.querySelector(`#slots-${dia.fecha}`);
+        if (!slotContainer) return;
+        if (!dia.trabaja) {
+            slotContainer.innerHTML = '<div class="text-muted">No labora</div>';
+            return;
+        }
+        if (dia.en_vacaciones) {
+            slotContainer.innerHTML = '<div class="text-muted">Vacaciones</div>';
+            return;
+        }
+        if (dia.slots.length === 0) {
+            slotContainer.innerHTML = '<div class="text-muted">Sin disponibilidad</div>';
+            return;
+        }
+        dia.slots.forEach(slot => {
+            const boton = document.createElement('button');
+            boton.type = 'button';
+            boton.className = 'btn btn-sm';
+            boton.textContent = slot.hora;
+            boton.disabled = slot.estado !== 'disponible';
+            if (slot.estado === 'disponible') {
+                boton.classList.add('btn-outline-success');
+                boton.addEventListener('click', () => seleccionarSlot(dia.fecha, slot.hora, boton));
+            } else if (slot.estado === 'ocupado') {
+                boton.classList.add('btn-outline-danger');
+            } else if (slot.estado === 'pasado') {
+                boton.classList.add('btn-outline-secondary');
+            } else {
+                boton.classList.add('btn-outline-warning');
+            }
+            slotContainer.appendChild(boton);
+        });
+    });
+}
+
+function seleccionarSlot(fecha, hora, boton) {
+    const botones = document.querySelectorAll('#modalCalendarioDisponibilidad .btn-outline-success');
+    botones.forEach(b => b.classList.remove('btn-success'));
+    boton.classList.add('btn-success');
+    slotSeleccionado = { fecha, hora };
+    document.getElementById('modalNuevaFechaHora').innerText = `${formatDateDisplay(fecha)} - ${hora}`;
+    document.getElementById('modalSeleccionMensaje').innerText = 'Confirma el nuevo horario para reagendar esta cita.';
+    document.getElementById('btnGuardarReagendado').disabled = false;
+}
+
+function cambiarSemana(delta) {
+    reagendarFechaBase.setDate(reagendarFechaBase.getDate() + delta * 7);
+    cargarDisponibilidadMedico(reagendarMedicoId, reagendarFechaBase);
+}
+
+document.querySelectorAll('.btn-reagendar').forEach(button => {
+    button.addEventListener('click', abrirModalReagendar);
+});
+
+document.getElementById('btnSemanaAnteriorModal').addEventListener('click', () => cambiarSemana(-1));
+
+document.getElementById('btnSemanaSiguienteModal').addEventListener('click', () => cambiarSemana(1));
+
+document.getElementById('btnGuardarReagendado').addEventListener('click', () => {
+    if (!slotSeleccionado || !reagendarCitaId) {
+        return;
+    }
+    const formData = new URLSearchParams();
+    formData.append('fecha', slotSeleccionado.fecha);
+    formData.append('hora', slotSeleccionado.hora);
+    fetch(`/agendamiento/citas/reagendar/${reagendarCitaId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString()
+    })
+    .then(resp => resp.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.error || 'No se pudo reagendar la cita.');
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Ocurrió un error al intentar reagendar.');
+    });
+});
+</script>
 {% endblock %}

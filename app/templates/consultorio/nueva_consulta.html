@@ -29,16 +29,14 @@
         </div>
 
         <!-- Alergias -->
-        {% if cita.paciente.alergias %}
         <div class="card mb-3 border-warning">
             <div class="card-header bg-warning">
                 <h6 class="mb-0"><i class="bi bi-exclamation-triangle-fill"></i> ALERGIAS</h6>
             </div>
             <div class="card-body">
-                <p class="text-danger mb-0"><strong>{{ cita.paciente.alergias }}</strong></p>
+                <p class="text-danger mb-0"><strong>{{ cita.paciente.alergias or 'Ninguna registrada' }}</strong></p>
             </div>
         </div>
-        {% endif %}
 
         <!-- Historial de Consultas -->
         <div class="card">
@@ -111,17 +109,16 @@
                     <!-- Motivo y Diagnóstico -->
                     <div class="row mb-3">
                         <div class="col-md-12">
-                            <label for="motivo" class="form-label">Motivo de Consulta <span class="text-danger">*</span></label>
-                            <textarea class="form-control" id="motivo" name="motivo" rows="2" 
-                                      required>{{ cita.motivo }}</textarea>
+                            <label for="motivo" class="form-label">Motivo de Consulta</label>
+                            <textarea class="form-control" id="motivo" name="motivo" rows="2">{{ cita.motivo }}</textarea>
                         </div>
                     </div>
 
                     <div class="row mb-3">
                         <div class="col-md-12">
-                            <label for="diagnostico" class="form-label">Diagnóstico <span class="text-danger">*</span></label>
+                            <label for="diagnostico" class="form-label">Diagnóstico</label>
                             <textarea class="form-control" id="diagnostico" name="diagnostico" rows="3" 
-                                      required placeholder="Diagnóstico médico"></textarea>
+                                      placeholder="Diagnóstico médico"></textarea>
                         </div>
                     </div>
 
@@ -160,6 +157,19 @@
                         <pre id="orden-texto" class="mb-0" style="white-space: pre-wrap;"></pre>
                     </div>
                     <input type="hidden" name="orden_texto" id="orden_texto_input">
+
+                    <!-- Odontograma -->
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0"><i class="bi bi-journal-medical"></i> Odontograma</h5>
+                        <div>
+                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalOdontograma">
+                                <i class="bi bi-clipboard2-data"></i> Odontograma
+                            </button>
+                        </div>
+                    </div>
+                    <input type="hidden" name="odontograma_json" id="odontograma_json_input" value="">
+                    <small class="text-muted d-block mb-3">Abre el odontograma para evaluar dientes, asociar procedimientos y marcar los dientes trabajados.</small>
 
                     <!-- Procedimientos -->
                     <hr>
@@ -311,7 +321,618 @@ Control de rutina / Evaluación metabólica"></textarea>
     </div>
 </div>
 
+<!-- Modal para Odontograma -->
+<div class="modal fade" id="modalOdontograma" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title"><i class="bi bi-clipboard2-data"></i> Odontograma</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-lg-8">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <p class="small text-muted mb-3">Ctrl/Cmd + clic para seleccionar múltiples dientes. Clic normal para editar un diente.</p>
+                                <div id="odontograma-grid" class="odontograma-grid"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="card mb-3 border-primary">
+                            <div class="card-header bg-light">
+                                <strong>Tratamientos asociados</strong>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <div id="odontograma-tratamientos" style="max-height: 440px; overflow-y: auto;"></div>
+                                </div>
+                                <div class="alert alert-light small mb-0">
+                                    Los cambios se actualizan en el odontograma y se guardarán junto con la consulta.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarOdontogramaModal()">Guardar odontograma</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de edición de diente -->
+<div class="modal fade" id="modalDiente" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title">Editar diente <span id="modalDienteNumero"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="modalDienteId">
+                <div class="mb-3">
+                    <label class="form-label">Estado general</label>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-secondary" id="btnEstadoNormal" onclick="setDienteEstado('normal')">Normal</button>
+                        <button type="button" class="btn btn-outline-danger" id="btnEstadoEvaluado" onclick="setDienteEstado('evaluado')">Evaluado</button>
+                        <button type="button" class="btn btn-outline-success" id="btnEstadoTerminado" onclick="setDienteEstado('terminado')">Terminado</button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="modalDienteDescripcion" class="form-label">Descripción clínica</label>
+                    <textarea class="form-control" id="modalDienteDescripcion" rows="2" placeholder="Notas generales del diente..."></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Tratamientos por superficie</label>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <div class="card p-2 border-primary">
+                                <strong class="text-primary">Oclusal</strong>
+                                <select class="form-select form-select-sm mt-1" id="proc-oclusal">
+                                    <option value="">Sin tratamiento</option>
+                                    {% for proc in procedimientos_disponibles %}
+                                    <option value="{{ proc.id }}">{{ proc.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-check mt-1">
+                                    <input class="form-check-input" type="checkbox" id="trab-oclusal">
+                                    <label class="form-check-label small">Trabajado</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card p-2 border-success">
+                                <strong class="text-success">Vestibular</strong>
+                                <select class="form-select form-select-sm mt-1" id="proc-vestibular">
+                                    <option value="">Sin tratamiento</option>
+                                    {% for proc in procedimientos_disponibles %}
+                                    <option value="{{ proc.id }}">{{ proc.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-check mt-1">
+                                    <input class="form-check-input" type="checkbox" id="trab-vestibular">
+                                    <label class="form-check-label small">Trabajado</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card p-2 border-info">
+                                <strong class="text-info">Lingual</strong>
+                                <select class="form-select form-select-sm mt-1" id="proc-lingual">
+                                    <option value="">Sin tratamiento</option>
+                                    {% for proc in procedimientos_disponibles %}
+                                    <option value="{{ proc.id }}">{{ proc.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-check mt-1">
+                                    <input class="form-check-input" type="checkbox" id="trab-lingual">
+                                    <label class="form-check-label small">Trabajado</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card p-2 border-warning">
+                                <strong class="text-warning">Mesial</strong>
+                                <select class="form-select form-select-sm mt-1" id="proc-mesial">
+                                    <option value="">Sin tratamiento</option>
+                                    {% for proc in procedimientos_disponibles %}
+                                    <option value="{{ proc.id }}">{{ proc.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-check mt-1">
+                                    <input class="form-check-input" type="checkbox" id="trab-mesial">
+                                    <label class="form-check-label small">Trabajado</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card p-2 border-danger">
+                                <strong class="text-danger">Distal</strong>
+                                <select class="form-select form-select-sm mt-1" id="proc-distal">
+                                    <option value="">Sin tratamiento</option>
+                                    {% for proc in procedimientos_disponibles %}
+                                    <option value="{{ proc.id }}">{{ proc.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-check mt-1">
+                                    <input class="form-check-input" type="checkbox" id="trab-distal">
+                                    <label class="form-check-label small">Trabajado</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card p-2 border-dark">
+                                <strong class="text-dark">Diente completo</strong>
+                                <select class="form-select form-select-sm mt-1" id="proc-completo">
+                                    <option value="">Sin tratamiento</option>
+                                    {% for proc in procedimientos_disponibles %}
+                                    <option value="{{ proc.id }}">{{ proc.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-check mt-1">
+                                    <input class="form-check-input" type="checkbox" id="trab-completo">
+                                    <label class="form-check-label small">Trabajado</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarDienteModal()">Guardar diente</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .odontograma-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    .odontograma-row {
+        display: grid;
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        gap: 0.75rem;
+    }
+    .odontograma-tooth {
+        cursor: pointer;
+        border: 1px solid #d1d5db;
+        border-radius: 0.75rem;
+        min-height: 110px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8f9fa;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+    .odontograma-tooth:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.06);
+    }
+    .odontograma-tooth.odontograma-normal {
+        background-color: #f8f9fa;
+        border-color: #ced4da;
+    }
+    .odontograma-tooth.odontograma-evaluado {
+        background-color: #f8d7da;
+        border-color: #f5c2c7;
+    }
+    .odontograma-tooth.odontograma-terminado {
+        background-color: #d1e7dd;
+        border-color: #badbcc;
+    }
+    .odontograma-tooth.odontograma-selected {
+        box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.2);
+        border-color: #0d6efd;
+    }
+    .odontograma-shape {
+        fill: transparent;
+        stroke: currentColor;
+        stroke-width: 2;
+    }
+    .odontograma-number {
+        font-size: 22px;
+        font-weight: 700;
+        fill: #212529;
+    }
+    .odontograma-state {
+        font-size: 12px;
+        fill: #495057;
+        opacity: 0.85;
+    }
+    .superficie-historica {
+        opacity: 0.5 !important;
+        pointer-events: none;
+        background-color: #e9ecef !important;
+    }
+    .superficie-historica input,
+    .superficie-historica select {
+        background-color: #e9ecef !important;
+        color: #6c757d !important;
+        cursor: not-allowed !important;
+        border-color: #dee2e6 !important;
+    }
+    .superficie-historica label {
+        color: #6c757d;
+    }
+</style>
+
 <script>
+// Odontograma
+const odontogramaTeeth = [
+    11,12,13,14,15,16,17,18,
+    21,22,23,24,25,26,27,28,
+    31,32,33,34,35,36,37,38,
+    41,42,43,44,45,46,47,48
+];
+const odontogramaState = {};
+let odontogramaSeleccionados = new Set();
+let odontogramaDienteActual = null;
+const odontogramaProcedimientos = [
+    {% for proc in procedimientos_disponibles %}
+    { id: {{ proc.id }}, nombre: {{ proc.nombre|tojson }} }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+const odontogramaAnterior = {{ ultimo_odontograma_json|tojson }};
+
+function initOdontograma() {
+    odontogramaTeeth.forEach(numero => {
+        odontogramaState[numero] = {
+            diente: numero,
+            estado: 'normal',
+            descripcion: '',
+            superficies: {
+                completo: { procedimiento_id: null, trabajado: false, historico: false },
+                oclusal: { procedimiento_id: null, trabajado: false, historico: false },
+                vestibular: { procedimiento_id: null, trabajado: false, historico: false },
+                lingual: { procedimiento_id: null, trabajado: false, historico: false },
+                mesial: { procedimiento_id: null, trabajado: false, historico: false },
+                distal: { procedimiento_id: null, trabajado: false, historico: false }
+            }
+        };
+    });
+
+    if (odontogramaAnterior && odontogramaAnterior.dientes) {
+        cargarOdontogramaAnterior(odontogramaAnterior);
+    }
+
+    renderOdontogramaGrid();
+    actualizarResumenOdontograma();
+    actualizarJsonHidden();
+}
+
+function cargarOdontogramaAnterior(datos) {
+    Object.entries(datos.dientes || {}).forEach(([key, value]) => {
+        const numero = parseInt(key, 10);
+        if (!odontogramaState[numero]) {
+            return;
+        }
+        odontogramaState[numero].estado = value.estado || 'normal';
+        odontogramaState[numero].descripcion = value.descripcion || '';
+
+        // Compatibilidad con datos antiguos (procedimientos globales)
+        if (value.superficies) {
+            // Nuevos datos con superficies
+            Object.keys(value.superficies).forEach(supName => {
+                const supData = value.superficies[supName];
+                const esHistorico = supData && (supData.historico || supData.trabajado);
+                if (esHistorico) {
+                    // Si fue trabajado en consulta anterior, marcar como histórico.
+                    // No se vuelve a facturar en esta nueva sesión.
+                    odontogramaState[numero].superficies[supName] = {
+                        procedimiento_id: supData.procedimiento_id || null,
+                        trabajado: false,
+                        historico: true
+                    };
+                } else {
+                    // No fue trabajado, puede editarse
+                    odontogramaState[numero].superficies[supName] = {
+                        procedimiento_id: supData ? supData.procedimiento_id : null,
+                        trabajado: false,
+                        historico: false
+                    };
+                }
+            });
+        } else if (value.procedimientos) {
+            // Datos antiguos: asignar procedimientos a oclusal por defecto
+            odontogramaState[numero].superficies.oclusal.procedimiento_id = value.procedimientos.length > 0 ? value.procedimientos[0].id : null;
+            odontogramaState[numero].superficies.oclusal.trabajado = false;
+            if (value.trabajado || value.historico) {
+                odontogramaState[numero].superficies.oclusal.historico = true;
+            }
+        }
+    });
+}
+
+function renderOdontogramaGrid() {
+    const grid = document.getElementById('odontograma-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const filas = [
+        odontogramaTeeth.slice(0, 8),
+        odontogramaTeeth.slice(8, 16),
+        odontogramaTeeth.slice(16, 24),
+        odontogramaTeeth.slice(24, 32)
+    ];
+
+    filas.forEach((fila, filaIndex) => {
+        const row = document.createElement('div');
+        row.className = 'odontograma-row mb-3';
+        fila.forEach(numero => {
+            const estado = odontogramaState[numero].estado;
+            const seleccionado = odontogramaSeleccionados.has(numero);
+            const item = document.createElement('div');
+            item.className = `odontograma-tooth odontograma-${estado}` + (seleccionado ? ' odontograma-selected' : '');
+            item.id = `diente-${numero}`;
+            item.dataset.diente = numero;
+            item.title = `Diente ${numero} — Estado: ${estado}`;
+            item.setAttribute('role', 'button');
+            item.setAttribute('tabindex', '0');
+            item.innerHTML = `
+                <svg viewBox="0 0 120 120" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="10" y="10" width="100" height="100" rx="16" ry="16" class="odontograma-shape" />
+                    <text x="60" y="55" text-anchor="middle" class="odontograma-number">${numero}</text>
+                    <text x="60" y="85" text-anchor="middle" class="odontograma-state">${estado.charAt(0).toUpperCase() + estado.slice(1)}</text>
+                </svg>
+            `;
+            item.addEventListener('click', function(event) {
+                onDienteClick(numero, event);
+            });
+            row.appendChild(item);
+        });
+        grid.appendChild(row);
+    });
+}
+
+function onDienteClick(numero, event) {
+    if (event.ctrlKey || event.metaKey) {
+        toggleSeleccion(numero);
+        return;
+    }
+    odontogramaSeleccionados.clear();
+    document.querySelectorAll('.odontograma-selected').forEach(el => el.classList.remove('odontograma-selected'));
+    abrirModalDiente(numero);
+}
+
+function toggleSeleccion(numero) {
+    if (odontogramaSeleccionados.has(numero)) {
+        odontogramaSeleccionados.delete(numero);
+    } else {
+        odontogramaSeleccionados.add(numero);
+    }
+    const element = document.getElementById(`diente-${numero}`);
+    if (element) {
+        element.classList.toggle('odontograma-selected');
+    }
+    actualizarResumenOdontograma();
+}
+
+function aplicarEstadoSeleccion(estado) {
+    if (odontogramaSeleccionados.size === 0) {
+        alert('Seleccione al menos un diente con Ctrl/Cmd + clic.');
+        return;
+    }
+    odontogramaSeleccionados.forEach(numero => {
+        odontogramaState[numero].estado = estado;
+        updateDienteVisual(numero);
+    });
+    actualizarResumenOdontograma();
+    actualizarJsonHidden();
+}
+
+function limpiarSeleccion() {
+    odontogramaSeleccionados.clear();
+    document.querySelectorAll('.odontograma-selected').forEach(el => el.classList.remove('odontograma-selected'));
+    actualizarResumenOdontograma();
+}
+
+function abrirModalDiente(numero) {
+    odontogramaDienteActual = numero;
+    const data = odontogramaState[numero];
+    document.getElementById('modalDienteId').value = numero;
+    document.getElementById('modalDienteNumero').textContent = numero;
+    document.getElementById('modalDienteDescripcion').value = data.descripcion || '';
+    setDienteEstado(data.estado, false);
+
+    // Poblar superficies y deshabilitar históricos
+    const superficies = ['completo', 'oclusal', 'vestibular', 'lingual', 'mesial', 'distal'];
+    superficies.forEach(sup => {
+        const select = document.getElementById(`proc-${sup}`);
+        const checkbox = document.getElementById(`trab-${sup}`);
+        const supData = data.superficies[sup] || { procedimiento_id: null, trabajado: false, historico: false };
+        select.value = supData.procedimiento_id || '';
+        checkbox.checked = supData.historico ? true : (supData.trabajado || false);
+        
+        // Deshabilitar si es histórico
+        if (supData.historico) {
+            select.disabled = true;
+            checkbox.disabled = true;
+            select.parentElement.classList.add('superficie-historica');
+            checkbox.parentElement.classList.add('superficie-historica');
+        } else {
+            select.disabled = false;
+            checkbox.disabled = false;
+            select.parentElement.classList.remove('superficie-historica');
+            checkbox.parentElement.classList.remove('superficie-historica');
+        }
+    });
+
+    const modal = new bootstrap.Modal(document.getElementById('modalDiente'));
+    modal.show();
+}
+
+function setDienteEstado(estado, actualizarBotones = true) {
+    const estados = ['normal', 'evaluado', 'terminado'];
+    estados.forEach(name => {
+        const btn = document.getElementById(`btnEstado${name.charAt(0).toUpperCase() + name.slice(1)}`);
+        if (btn) {
+            btn.classList.toggle('active', name === estado);
+        }
+    });
+    if (actualizarBotones) {
+        if (odontogramaDienteActual !== null) {
+            odontogramaState[odontogramaDienteActual].estado = estado;
+            updateDienteVisual(odontogramaDienteActual);
+            actualizarJsonHidden();
+        }
+    }
+}
+
+function renderProcedimientosSeleccionados(superficies) {
+    const lista = document.getElementById('modalDienteProcedimientosLista');
+    lista.innerHTML = '';
+    const procedimientosMostrados = new Set();
+
+    Object.entries(superficies).forEach(([supNombre, supData]) => {
+        if (supData.procedimiento_id) {
+            const proc = odontogramaProcedimientos.find(p => p.id === supData.procedimiento_id);
+            if (proc && !procedimientosMostrados.has(proc.id)) {
+                procedimientosMostrados.add(proc.id);
+                const li = document.createElement('li');
+                li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                li.innerHTML = `
+                    <span><strong>${supNombre.charAt(0).toUpperCase() + supNombre.slice(1)}:</strong> ${proc.nombre}</span>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" 
+                               id="trab-check-${supNombre}" 
+                               ${supData.trabajado ? 'checked' : ''} 
+                               onchange="toggleTrabajado('${supNombre}')">
+                        <label class="form-check-label small" for="trab-check-${supNombre}">Trabajado</label>
+                    </div>
+                `;
+                lista.appendChild(li);
+            }
+        }
+    });
+
+    if (procedimientosMostrados.size === 0) {
+        lista.innerHTML = '<li class="list-group-item small text-muted">Sin procedimientos asignados.</li>';
+    }
+}
+
+function guardarDienteModal() {
+    if (odontogramaDienteActual === null) {
+        return;
+    }
+    const numero = odontogramaDienteActual;
+    odontogramaState[numero].descripcion = document.getElementById('modalDienteDescripcion').value.trim();
+    const estado = document.getElementById('btnEstadoEvaluado').classList.contains('active') ? 'evaluado' :
+                   document.getElementById('btnEstadoTerminado').classList.contains('active') ? 'terminado' : 'normal';
+    odontogramaState[numero].estado = estado;
+
+    // Guardar superficies y preservar el historial de superficies trabajadas
+    const superficies = ['completo', 'oclusal', 'vestibular', 'lingual', 'mesial', 'distal'];
+    superficies.forEach(sup => {
+        const select = document.getElementById(`proc-${sup}`);
+        const checkbox = document.getElementById(`trab-${sup}`);
+        const supData = odontogramaState[numero].superficies[sup];
+        const historico = supData.historico || false;
+        odontogramaState[numero].superficies[sup] = {
+            procedimiento_id: select.value ? parseInt(select.value, 10) : null,
+            trabajado: historico ? false : checkbox.checked,
+            historico: historico
+        };
+    });
+
+    updateDienteVisual(numero);
+    actualizarResumenOdontograma();
+    actualizarJsonHidden();
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalDiente'));
+    if (modal) {
+        modal.hide();
+    }
+}
+
+function toggleTrabajado(superficie) {
+    if (odontogramaDienteActual !== null) {
+        odontogramaState[odontogramaDienteActual].superficies[superficie].trabajado = 
+            document.getElementById(`trab-check-${superficie}`).checked;
+        actualizarJsonHidden();
+    }
+}
+
+function updateDienteVisual(numero) {
+    const element = document.getElementById(`diente-${numero}`);
+    if (!element) {
+        return;
+    }
+    element.classList.remove('odontograma-normal', 'odontograma-evaluado', 'odontograma-terminado');
+    element.classList.add(`odontograma-${odontogramaState[numero].estado}`);
+    const stateText = element.querySelector('.odontograma-state');
+    if (stateText) {
+        stateText.textContent = odontogramaState[numero].estado.charAt(0).toUpperCase() + odontogramaState[numero].estado.slice(1);
+    }
+}
+
+function actualizarResumenOdontograma() {
+    const tratamientos = document.getElementById('odontograma-tratamientos');
+    tratamientos.innerHTML = '';
+    odontogramaTeeth.forEach(numero => {
+        const data = odontogramaState[numero];
+        const tratamientosDiente = [];
+        Object.entries(data.superficies).forEach(([supNombre, supData]) => {
+            if (supData.procedimiento_id) {
+                const proc = odontogramaProcedimientos.find(p => p.id === supData.procedimiento_id);
+                if (proc) {
+                    tratamientosDiente.push({
+                        superficie: supNombre.charAt(0).toUpperCase() + supNombre.slice(1),
+                        procedimiento: proc.nombre,
+                        trabajado: supData.trabajado
+                    });
+                }
+            }
+        });
+
+        if (tratamientosDiente.length > 0) {
+            const card = document.createElement('div');
+            card.className = 'mb-2 border rounded p-2 bg-light';
+            const title = document.createElement('div');
+            title.className = 'fw-semibold mb-1';
+            title.textContent = `Diente ${numero} (${data.estado})`;
+            const procedures = document.createElement('div');
+            procedures.innerHTML = tratamientosDiente.map(t => 
+                `<span class="badge ${t.trabajado ? 'bg-success' : 'bg-secondary'} me-1 mb-1">${t.superficie}: ${t.procedimiento}</span>`
+            ).join('');
+            const notas = document.createElement('small');
+            notas.className = 'text-muted d-block mt-1';
+            notas.textContent = data.descripcion ? data.descripcion : 'Sin notas';
+            card.appendChild(title);
+            card.appendChild(procedures);
+            card.appendChild(notas);
+            tratamientos.appendChild(card);
+        }
+    });
+    if (!tratamientos.hasChildNodes()) {
+        tratamientos.innerHTML = '<div class="small text-muted">Ningún tratamiento asociado todavía.</div>';
+    }
+}
+
+function actualizarJsonHidden() {
+    const input = document.getElementById('odontograma_json_input');
+    if (!input) {
+        return;
+    }
+    input.value = JSON.stringify({ dientes: odontogramaState, actualizado: new Date().toISOString() });
+}
+
+function guardarOdontogramaModal() {
+    actualizarJsonHidden();
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalOdontograma'));
+    if (modal) {
+        modal.hide();
+    }
+}
+
+window.addEventListener('DOMContentLoaded', initOdontograma);
+
 // Guardar receta
 function guardarReceta() {
     const texto = document.getElementById('receta-textarea').value.trim();
@@ -384,12 +1005,7 @@ document.getElementById('btnAgregarInsumo').addEventListener('click', function()
 
 // Validación del formulario
 document.getElementById('formConsulta').addEventListener('submit', function(e) {
-    const diagnostico = document.getElementById('diagnostico').value.trim();
-    if (!diagnostico) {
-        e.preventDefault();
-        alert('El diagnóstico es obligatorio');
-        document.getElementById('diagnostico').focus();
-    }
+    // Validaciones opcionales removidas - ahora se puede guardar sin diagnóstico o motivo
 });
 
 // Imprimir preview de receta (sin necesidad de guardar en DB)

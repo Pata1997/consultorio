@@ -37,8 +37,8 @@ class Consulta(db.Model):
     medico_id = db.Column(db.Integer, db.ForeignKey('medicos.id'), nullable=False)
     especialidad_id = db.Column(db.Integer, db.ForeignKey('especialidades.id'), nullable=False)
     fecha = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    motivo = db.Column(db.Text, nullable=False)
-    diagnostico = db.Column(db.Text, nullable=False)
+    motivo = db.Column(db.Text, nullable=True)
+    diagnostico = db.Column(db.Text, nullable=True)
     observaciones = db.Column(db.Text)
     
     # Signos vitales
@@ -60,6 +60,22 @@ class Consulta(db.Model):
     
     def __repr__(self):
         return f'<Consulta {self.id} - {self.fecha}>'
+
+class Odontograma(db.Model):
+    """Snapshot de odontograma asociado a una consulta."""
+    __tablename__ = 'odontogramas'
+
+    id = db.Column(db.Integer, primary_key=True)
+    consulta_id = db.Column(db.Integer, db.ForeignKey('consultas.id'), nullable=False)
+    paciente_id = db.Column(db.Integer, db.ForeignKey('pacientes.id'), nullable=False)
+    fecha = db.Column(db.DateTime, default=datetime.utcnow)
+    datos = db.Column(db.JSON, nullable=False)
+
+    consulta = db.relationship('Consulta', backref='odontogramas', lazy=True)
+    paciente = db.relationship('Paciente', foreign_keys=[paciente_id])
+
+    def __repr__(self):
+        return f'<Odontograma C:{self.consulta_id}>'
 
 class Receta(db.Model):
     """Modelo para recetas médicas (medicamentos externos)"""

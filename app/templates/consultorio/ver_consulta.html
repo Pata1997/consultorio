@@ -33,6 +33,64 @@
                 <h5>Observaciones</h5>
                 <p>{{ consulta.observaciones or 'Sin observaciones' }}</p>
 
+                {% if consulta.procedimientos_realizados %}
+                <hr>
+                <h5>Procedimientos facturados en esta consulta</h5>
+                <div class="border rounded p-3 mb-3 bg-light">
+                    <ul class="list-unstyled mb-0">
+                        {% for proc in consulta.procedimientos_realizados %}
+                        <li class="mb-2">
+                            <strong>{{ proc.procedimiento_rel.nombre if proc.procedimiento_rel else 'Procedimiento' }}</strong><br>
+                            <small class="text-muted">{{ proc.observaciones or 'Sin observaciones adicionales' }}</small>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% if odontograma_summary %}
+                <hr>
+                <h5>Historial de Odontograma</h5>
+                <p class="mb-1"><strong>Fecha Odontograma:</strong> {{ odontograma_summary.fecha.strftime('%d/%m/%Y %H:%M') }}</p>
+                {% if odontograma_summary.estados.evaluado %}
+                <p class="mb-1"><strong>Dientes evaluados:</strong> {{ odontograma_summary.estados.evaluado | join(', ') }}</p>
+                {% endif %}
+                {% if odontograma_summary.estados.terminado %}
+                <p class="mb-1"><strong>Dientes terminados:</strong> {{ odontograma_summary.estados.terminado | join(', ') }}</p>
+                {% endif %}
+
+                {% if odontograma_summary.superficies_actuales %}
+                <div class="border rounded p-3 mb-3 bg-light">
+                    <h6 class="mb-3">Superficies trabajadas en esta sesión</h6>
+                    <ul class="list-group list-group-flush">
+                        {% for sup in odontograma_summary.superficies_actuales %}
+                        <li class="list-group-item">
+                            <div><strong>Diente {{ sup.diente }}</strong> · {{ sup.superficie }}</div>
+                            <div class="text-muted small">{{ sup.procedimiento_nombre }}</div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% if odontograma_summary.superficies_historicas %}
+                <div class="border rounded p-3 mb-3 bg-light">
+                    <h6 class="mb-3">Superficies históricas</h6>
+                    <ul class="list-group list-group-flush">
+                        {% for sup in odontograma_summary.superficies_historicas %}
+                        <li class="list-group-item d-flex justify-content-between align-items-start">
+                            <div>
+                                <div><strong>Diente {{ sup.diente }}</strong> · {{ sup.superficie }}</div>
+                                <div class="text-muted small">{{ sup.procedimiento_nombre }}</div>
+                            </div>
+                            <span class="badge bg-secondary">Histórico</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                {% endif %}
+
                 <hr>
 
                 {% if consulta.recetas %}

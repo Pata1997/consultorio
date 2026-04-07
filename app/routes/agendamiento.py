@@ -103,6 +103,53 @@ def editar_cita(id):
     
     return render_template('agendamiento/editar_cita.html', cita=cita)
 
+@bp.route('/citas/reagendar/<int:id>', methods=['POST'])
+@login_required
+def reagendar_cita(id):
+    """Reagendar una cita pendiente desde el listado en modal."""
+    cita = Cita.query.get_or_404(id)
+    if cita.estado != 'pendiente':
+        return jsonify({'error': 'Solo se pueden reagendar citas pendientes.'}), 400
+
+    fecha_str = request.form.get('fecha')
+    hora_str = request.form.get('hora')
+    if not fecha_str or not hora_str:
+        return jsonify({'error': 'Fecha y hora son requeridas.'}), 400
+
+    try:
+        fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        hora = datetime.strptime(hora_str, '%H:%M').time()
+    except ValueError:
+        return jsonify({'error': 'Formato de fecha u hora inválido.'}), 400
+
+    if fecha < date.today():
+        return jsonify({'error': 'No se pueden agendar citas en fechas pasadas.'}), 400
+
+    # Validar disponibilidad del médico, excluyendo la cita actual
+    hora_fin = (datetime.combine(fecha, hora) + timedelta(minutes=30)).time()
+    disponible, motivo_no_disponible = medico_disponible_en_fecha(
+        cita.medico_id, fecha, hora, hora_fin
+    )
+    if not disponible:
+        return jsonify({'error': f'No se puede reagendar: {motivo_no_disponible}'}), 400
+
+    cita_existente = Cita.query.filter(
+        Cita.id != id,
+        Cita.medico_id == cita.medico_id,
+        Cita.fecha == fecha,
+        Cita.hora == hora,
+        Cita.estado.in_(['pendiente', 'confirmada'])
+    ).first()
+    if cita_existente:
+        return jsonify({'error': 'El nuevo horario ya está ocupado.'}), 400
+
+    cita.fecha = fecha
+    cita.hora = hora
+    db.session.commit()
+    audit('editar', 'citas', cita.id, descripcion=f'Cita reagendada a {cita.fecha} {cita.hora}')
+
+    return jsonify({'success': True, 'message': 'Cita reagendada correctamente.'})
+
 @bp.route('/citas/cancelar/<int:id>', methods=['POST'])
 @login_required
 def cancelar_cita(id):
