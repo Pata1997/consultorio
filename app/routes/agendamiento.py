@@ -314,10 +314,17 @@ def disponibilidad_semanal(medico_id):
         for h in horarios:
             if h.dia_semana not in horarios_por_dia:
                 horarios_por_dia[h.dia_semana] = []
-            horarios_por_dia[h.dia_semana].append({
-                'hora_inicio': h.hora_inicio,
-                'hora_fin': h.hora_fin
-            })
+            # Verificar que no haya duplicados (mismos hora_inicio y hora_fin)
+            horario_key = (h.hora_inicio, h.hora_fin)
+            existe = any(
+                (r['hora_inicio'], r['hora_fin']) == horario_key 
+                for r in horarios_por_dia[h.dia_semana]
+            )
+            if not existe:
+                horarios_por_dia[h.dia_semana].append({
+                    'hora_inicio': h.hora_inicio,
+                    'hora_fin': h.hora_fin
+                })
         print(f"[DEBUG] Días de la semana generados: {[d.strftime('%Y-%m-%d (%A)') for d in dias_semana]}")
         
         # Obtener vacaciones del médico
@@ -436,6 +443,15 @@ def disponibilidad_semanal(medico_id):
                         'estado': estado
                     })
                     hora_actual += timedelta(minutes=duracion)
+            
+            # Eliminar slots duplicados (por si acaso)
+            slots_unicos = []
+            horas_vistas = set()
+            for slot in slots:
+                if slot['hora'] not in horas_vistas:
+                    slots_unicos.append(slot)
+                    horas_vistas.add(slot['hora'])
+            slots = slots_unicos
             
             calendario.append({
                 'fecha': fecha.isoformat(),
