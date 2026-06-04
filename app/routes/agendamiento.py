@@ -562,15 +562,21 @@ def buscar_especialidades():
     """API para buscar especialidades por nombre"""
     query = request.args.get('q', '').strip()
     
-    if len(query) < 2:
+    # Si no hay query, devolver todas las especialidades activas
+    if len(query) == 0:
+        especialidades = Especialidad.query.filter(
+            Especialidad.activo == True
+        ).all()
+    # Si hay query, filtrar
+    elif len(query) < 2:
         return jsonify([])
-    
-    especialidades = Especialidad.query.filter(
-        and_(
-            Especialidad.activo == True,
-            Especialidad.nombre.ilike(f'%{query}%')
-        )
-    ).limit(10).all()
+    else:
+        especialidades = Especialidad.query.filter(
+            and_(
+                Especialidad.activo == True,
+                Especialidad.nombre.ilike(f'%{query}%')
+            )
+        ).limit(10).all()
     
     resultados = [{
         'id': e.id,

@@ -625,7 +625,17 @@ def orden_preview_pdf():
     timestamp = datetime.utcnow().strftime('%d/%m/%Y %H:%M')
     story.append(Paragraph(timestamp, estilo_ts))
     story.append(Spacer(1, 6))
-    story.append(Paragraph('ÓRDENES DE ESTUDIOS', estilo_titulo))
+    
+    # Determine title based on tipo
+    tipo = (data.get('tipo') or '').lower().strip()
+    if tipo == 'analisis':
+        titulo_doc = 'ORDEN DE ANÁLISIS'
+    elif tipo == 'justificativo':
+        titulo_doc = 'JUSTIFICATIVO MÉDICO'
+    else:
+        titulo_doc = 'ÓRDENES DE ESTUDIOS'
+    
+    story.append(Paragraph(titulo_doc, estilo_titulo))
     story.append(Spacer(1, 12))
 
     # Patient block

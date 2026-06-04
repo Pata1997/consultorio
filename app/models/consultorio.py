@@ -99,7 +99,7 @@ class OrdenEstudio(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     consulta_id = db.Column(db.Integer, db.ForeignKey('consultas.id'), nullable=False)
-    tipo = db.Column(db.String(50), nullable=False)  # estudio, analisis
+    tipo = db.Column(db.String(50), nullable=False)  # estudio, analisis, justificativo
     descripcion = db.Column(db.Text, nullable=False)
     indicaciones = db.Column(db.Text)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)

@@ -110,6 +110,32 @@
     cursor: not-allowed;
     text-decoration: line-through;
 }
+
+/* Estilos para botones de navegación de calendario */
+.btn-group-calendario .btn {
+    background-color: #007bff;
+    color: white;
+    border: 1px solid #0056b3;
+    font-weight: 600;
+    padding: 8px 16px;
+    transition: all 0.2s ease;
+}
+
+.btn-group-calendario .btn:hover {
+    background-color: #0056b3;
+    border-color: #003d82;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-group-calendario .btn:active {
+    background-color: #003d82;
+    transform: translateY(0);
+}
+
+.btn-group-calendario .btn i {
+    margin: 0 4px;
+}
 </style>
 {% endblock %}
 
@@ -170,14 +196,14 @@
                                     <h5 class="mb-0">📅 Disponibilidad del Médico</h5>
                                     <small class="text-muted" id="periodo_calendario"></small>
                                 </div>
-                                <div class="btn-group btn-group-sm">
-                                    <button type="button" class="btn btn-outline-secondary" id="btn_semana_anterior">
+                                <div class="btn-group btn-group-sm btn-group-calendario">
+                                    <button type="button" class="btn" id="btn_semana_anterior">
                                         <i class="bi bi-chevron-left"></i> Anterior
                                     </button>
-                                    <button type="button" class="btn btn-outline-secondary" id="btn_semana_actual">
+                                    <button type="button" class="btn" id="btn_semana_actual">
                                         Hoy
                                     </button>
-                                    <button type="button" class="btn btn-outline-secondary" id="btn_semana_siguiente">
+                                    <button type="button" class="btn" id="btn_semana_siguiente">
                                         Siguiente <i class="bi bi-chevron-right"></i>
                                     </button>
                                 </div>
@@ -285,19 +311,16 @@ const especialidadId = document.getElementById('especialidad_id');
 const especialidadResultados = document.getElementById('especialidad_resultados');
 let especialidadTimeout;
 
-especialidadSearch.addEventListener('input', function() {
-    const query = this.value.trim();
-    
+// Función para cargar y mostrar especialidades
+function cargarEspecialidades(query = '') {
     clearTimeout(especialidadTimeout);
     
-    if (query.length < 2) {
-        especialidadResultados.style.display = 'none';
-        especialidadId.value = '';
-        return;
-    }
+    const url = query.length > 0 
+        ? `/agendamiento/api/buscar-especialidades?q=${encodeURIComponent(query)}`
+        : `/agendamiento/api/buscar-especialidades?q=`;
     
     especialidadTimeout = setTimeout(() => {
-        fetch(`/agendamiento/api/buscar-especialidades?q=${encodeURIComponent(query)}`)
+        fetch(url)
             .then(response => response.json())
             .then(data => {
                 if (data.length === 0) {
@@ -312,7 +335,27 @@ especialidadSearch.addEventListener('input', function() {
                 }
                 especialidadResultados.style.display = 'block';
             });
-    }, 300);
+    }, query.length > 0 ? 300 : 0);
+}
+
+// Al hacer focus/clic en el campo, mostrar todas las especialidades
+especialidadSearch.addEventListener('focus', function() {
+    if (this.value.trim() === '') {
+        cargarEspecialidades('');
+    }
+});
+
+// Al escribir, filtrar las especialidades
+especialidadSearch.addEventListener('input', function() {
+    const query = this.value.trim();
+    
+    if (query.length < 1) {
+        especialidadResultados.style.display = 'none';
+        especialidadId.value = '';
+        return;
+    }
+    
+    cargarEspecialidades(query);
 });
 
 especialidadResultados.addEventListener('click', function(e) {

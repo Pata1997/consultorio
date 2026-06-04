@@ -180,12 +180,15 @@
                                         {% endif %}
                                         {# Edit action removed for recepcionista per requirements #}
                                         {% if cita.estado not in ['cancelada', 'cancelada_paciente', 'atendida'] %}
-                                        <a href="{{ url_for('agendamiento.cancelar_cita', id=cita.id) }}" 
-                                           class="btn btn-sm btn-danger" 
-                                           title="Cancelar"
-                                           onclick="return confirm('¿Está seguro de cancelar esta cita?')">
-                                            <i class="bi bi-x-lg"></i>
-                                        </a>
+                                        <form method="POST" 
+                                            action="{{ url_for('agendamiento.cancelar_cita', id=cita.id) }}" 
+                                            style="display: inline;"
+                                            onsubmit="return confirm('¿Está seguro de cancelar esta cita?');">
+                                            <button type="submit" class="btn btn-sm btn-danger" 
+                                               title="Cancelar">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        </form>
                                         {% endif %}
                                     </div>
                                 </td>

@@ -93,38 +93,64 @@
 
                 <hr>
 
-                {% if consulta.recetas %}
+                {% if recetas %}
                 <h5 class="d-flex justify-content-between align-items-center">Recetas
                     <small>
                                 <a class="btn btn-sm btn-outline-primary download-pdf"
-                                    href="{{ url_for('consultorio.receta_pdf', consulta_id=consulta.id, receta_id=consulta.recetas[-1].id) }}"
+                                    href="{{ url_for('consultorio.receta_pdf', consulta_id=consulta.id, receta_id=recetas[-1].id) }}"
                                     data-filename="Receta_{{ consulta.id }}.pdf">
                             <i class="bi bi-printer"></i> Imprimir última receta
                         </a>
                     </small>
                 </h5>
                 <div class="border rounded p-3 mb-3 bg-light">
-                    <pre style="white-space: pre-wrap;">{{ consulta.recetas[-1].indicaciones }}</pre>
+                    <pre style="white-space: pre-wrap;">{{ recetas[-1].indicaciones }}</pre>
                 </div>
-                {% else %}
-                <p class="text-muted">No hay receta registrada.</p>
                 {% endif %}
 
-                {% if consulta.ordenes_estudio %}
+                {% if ordenes_estudios %}
                 <h5 class="d-flex justify-content-between align-items-center">Órdenes de Estudios
                     <small>
                                 <a class="btn btn-sm btn-outline-primary download-pdf"
-                                    href="{{ url_for('consultorio.orden_pdf', consulta_id=consulta.id, orden_id=consulta.ordenes_estudio[-1].id) }}"
+                                    href="{{ url_for('consultorio.orden_pdf', consulta_id=consulta.id, orden_id=ordenes_estudios[-1].id) }}"
                                     data-filename="Orden_{{ consulta.id }}.pdf">
                             <i class="bi bi-printer"></i> Imprimir última orden
                         </a>
                     </small>
                 </h5>
                 <div class="border rounded p-3 mb-3 bg-light">
-                    <pre style="white-space: pre-wrap;">{{ consulta.ordenes_estudio[-1].descripcion }}</pre>
+                    <pre style="white-space: pre-wrap;">{{ ordenes_estudios[-1].descripcion }}</pre>
                 </div>
-                {% else %}
-                <p class="text-muted">No hay órdenes de estudio registradas.</p>
+                {% endif %}
+
+                {% if ordenes_analisis %}
+                <h5 class="d-flex justify-content-between align-items-center">Órdenes de Análisis
+                    <small>
+                                <a class="btn btn-sm btn-outline-primary download-pdf"
+                                    href="{{ url_for('consultorio.orden_analisis_pdf', consulta_id=consulta.id, orden_id=ordenes_analisis[-1].id) }}"
+                                    data-filename="OrdenAnalisis_{{ consulta.id }}.pdf">
+                            <i class="bi bi-printer"></i> Imprimir última orden de análisis
+                        </a>
+                    </small>
+                </h5>
+                <div class="border rounded p-3 mb-3 bg-light">
+                    <pre style="white-space: pre-wrap;">{{ ordenes_analisis[-1].indicaciones }}</pre>
+                </div>
+                {% endif %}
+
+                {% if justificativos %}
+                <h5 class="d-flex justify-content-between align-items-center">Justificativo Médico
+                    <small>
+                                <a class="btn btn-sm btn-outline-primary download-pdf"
+                                    href="{{ url_for('consultorio.justificativo_pdf', consulta_id=consulta.id, justificativo_id=justificativos[-1].id) }}"
+                                    data-filename="Justificativo_{{ consulta.id }}.pdf">
+                            <i class="bi bi-printer"></i> Imprimir último justificativo
+                        </a>
+                    </small>
+                </h5>
+                <div class="border rounded p-3 mb-3 bg-light">
+                    <pre style="white-space: pre-wrap;">{{ justificativos[-1].descripcion }}</pre>
+                </div>
                 {% endif %}
 
             </div>

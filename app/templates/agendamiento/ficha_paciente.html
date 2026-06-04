@@ -26,8 +26,8 @@
                         <p class="mb-0 text-muted">Tel: {{ paciente.telefono or '-' }} · Email: {{ paciente.email or '-' }}</p>
                     </div>
                     <div class="text-end">
-                        {# Mostrar acciones SOLO si el usuario NO es recepcionista #}
-                        {% if current_user.rol != 'recepcionista' %}
+                        {# Mostrar acciones SOLO si el usuario NO es recepcionista ni médico #}
+                        {% if current_user.rol not in ['recepcionista', 'medico'] %}
                         <div class="btn-group" role="group">
                             <a href="{{ url_for('agendamiento.editar_paciente', id=paciente.id) }}" class="btn btn-outline-primary btn-sm">Editar</a>
                             <a href="{{ url_for('agendamiento.nuevo_paciente') }}" class="btn btn-outline-secondary btn-sm">Nueva Cita</a>
@@ -37,6 +37,8 @@
                         <div class="mt-2">
                             <a href="#" class="btn btn-sm btn-outline-dark">Imprimir</a>
                         </div>
+                        {% elif current_user.rol == 'medico' %}
+                        <small class="text-muted">Vista de sólo lectura para Médicos</small>
                         {% else %}
                         <small class="text-muted">Vista de sólo lectura para Recepción</small>
                         {% endif %}
@@ -53,12 +55,14 @@
                         <li class="nav-item" role="presentation">
                             <button class="nav-link" id="consultas-tab" data-bs-toggle="tab" data-bs-target="#consultas" type="button" role="tab">Consultas</button>
                         </li>
+                        {% if current_user.rol != 'medico' %}
                         <li class="nav-item" role="presentation">
                             <button class="nav-link" id="citas-tab" data-bs-toggle="tab" data-bs-target="#citas" type="button" role="tab">Citas</button>
                         </li>
                         <li class="nav-item" role="presentation">
                             <button class="nav-link" id="facturas-tab" data-bs-toggle="tab" data-bs-target="#facturas" type="button" role="tab">Facturación</button>
                         </li>
+                        {% endif %}
                     </ul>
                     <div class="tab-content mt-3">
                         <div class="tab-pane fade show active" id="resumen" role="tabpanel">
@@ -124,6 +128,7 @@
                             {% endif %}
                         </div>
 
+                        {% if current_user.rol != 'medico' %}
                         <div class="tab-pane fade" id="citas" role="tabpanel">
                             <h5 class="mb-2">Últimas citas</h5>
                             {% if ultimas_citas %}
@@ -187,6 +192,7 @@
                                 <p class="text-muted">No hay facturas asociadas a este paciente.</p>
                             {% endif %}
                         </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>

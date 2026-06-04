@@ -55,7 +55,7 @@
                     </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-people"></i> RRHH
+                            <i class="bi bi-people"></i> Agenda Médica
                         </a>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_vacaciones') }}"><i class="bi bi-calendar-x"></i> Mis Vacaciones</a></li>
@@ -112,7 +112,7 @@
                     {% if current_user.rol == 'admin' %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-people"></i> RRHH
+                            <i class="bi bi-people"></i> Agenda Médica
                         </a>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_vacaciones') }}">Vacaciones</a></li>
@@ -136,7 +136,7 @@
                     {% if current_user.rol in ['recepcionista', 'cajero', 'cajera'] %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-people"></i> RRHH
+                            <i class="bi bi-people"></i> Agenda Médica
                         </a>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="{{ url_for('rrhh.listar_asistencias') }}"><i class="bi bi-person-check"></i> Mi Asistencia</a></li>

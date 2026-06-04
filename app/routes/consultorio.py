@@ -437,6 +437,29 @@ def nueva_consulta(cita_id):
             )
             db.session.add(orden)
 
+        # Procesar órdenes de análisis (reutilizando tabla Receta)
+        ordenes_analisis_texto = request.form.get('ordenes_analisis_texto', '').strip()
+        if ordenes_analisis_texto:
+            orden_analisis = Receta(
+                consulta_id=consulta.id,
+                medicamento='Orden de Análisis',
+                dosis='Ver indicaciones',
+                frecuencia='Ver indicaciones',
+                duracion='Ver indicaciones',
+                indicaciones=ordenes_analisis_texto
+            )
+            db.session.add(orden_analisis)
+
+        # Procesar justificativo médico (reutilizando tabla OrdenEstudio)
+        justificativo_texto = request.form.get('justificativo_texto', '').strip()
+        if justificativo_texto:
+            justificativo = OrdenEstudio(
+                consulta_id=consulta.id,
+                tipo='justificativo',
+                descripcion=justificativo_texto
+            )
+            db.session.add(justificativo)
+
         # Procesar odontograma enviado desde el formulario
         odontograma_json = request.form.get('odontograma_json', '').strip()
         if odontograma_json and odontograma_json not in ('{}', '{ }'):
@@ -725,7 +748,20 @@ def ver_consulta(id):
             'superficies_historicas': superficies_historicas
         }
 
-    return render_template('consultorio/ver_consulta.html', consulta=consulta,
+    # Separar recetas normales de órdenes de análisis
+    recetas_normales = [r for r in consulta.recetas if r.medicamento != 'Orden de Análisis']
+    ordenes_analisis = [r for r in consulta.recetas if r.medicamento == 'Orden de Análisis']
+    
+    # Separar órdenes de estudios de justificativos médicos
+    ordenes_estudios = [o for o in consulta.ordenes_estudio if o.tipo == 'estudios']
+    justificativos = [o for o in consulta.ordenes_estudio if o.tipo == 'justificativo']
+
+    return render_template('consultorio/ver_consulta.html', 
+                           consulta=consulta,
+                           recetas=recetas_normales,
+                           ordenes_analisis=ordenes_analisis,
+                           ordenes_estudios=ordenes_estudios,
+                           justificativos=justificativos,
                            odontograma=odontograma,
                            odontograma_summary=odontograma_summary)
 
@@ -1000,6 +1036,276 @@ def orden_pdf(consulta_id, orden_id):
     return send_file(buffer, mimetype='application/pdf', as_attachment=True, download_name=f'Orden_{consulta.id}.pdf')
 
 
+@bp.route('/consultas/<int:consulta_id>/orden_analisis_pdf/<int:orden_id>')
+@login_required
+def orden_analisis_pdf(consulta_id, orden_id):
+    """Generar PDF de Orden de Análisis"""
+    consulta = Consulta.query.get_or_404(consulta_id)
+    if current_user.rol == 'medico' and current_user.medico:
+        if consulta.medico_id != current_user.medico.id:
+            abort(403)
+
+    orden = Receta.query.filter_by(id=orden_id, consulta_id=consulta_id).first_or_404()
+
+    from app.models import ConfiguracionConsultorio
+    config = ConfiguracionConsultorio.get_configuracion()
+
+    # Generar PDF con Platypus
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            leftMargin=25*mm, rightMargin=25*mm,
+                            topMargin=20*mm, bottomMargin=20*mm)
+    styles = getSampleStyleSheet()
+    normal = styles['Normal']
+    normal.leading = 14
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], alignment=TA_CENTER, fontSize=16, leading=18)
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], fontSize=10, leading=12)
+    body_style = ParagraphStyle('Body', parent=styles['Normal'], fontSize=11, leading=14)
+
+    story = []
+
+    # Timestamp (small)
+    timestamp = consulta.fecha.strftime('%d/%m/%Y, %H:%M')
+    story.append(Paragraph(f'<font size=8 color="#444444">{timestamp}</font>', ParagraphStyle('ts', parent=styles['Normal'], alignment=TA_LEFT)))
+    story.append(Spacer(1, 6))
+
+    # Clinic header
+    logo_path = _resolve_logo_path(config)
+    logo_elem = None
+    max_logo_w = 50 * mm
+    max_logo_h = 30 * mm
+    if logo_path:
+        try:
+            img_reader = ImageReader(logo_path)
+            iw, ih = img_reader.getSize()
+            ratio = min((max_logo_w) / float(iw), (max_logo_h) / float(ih))
+            if ratio <= 0 or ratio > 10:
+                ratio = min(max_logo_w / float(iw if iw else 1), max_logo_h / float(ih if ih else 1))
+            w = iw * ratio
+            h = ih * ratio
+            logo_elem = RLImage(logo_path, width=w, height=h)
+        except Exception:
+            logo_elem = None
+
+    clinic_html = f"<b>{config.nombre or 'Consultorio Médico'}</b><br/><font size=9>{(config.direccion or '')}<br/>Tel: {config.telefono or ''} &nbsp;&nbsp; RUC: {config.ruc or ''}</font>"
+    clinic_para = Paragraph(clinic_html, ParagraphStyle('Clinic', parent=styles['Normal'], fontSize=10, leading=12, textColor=colors.white))
+
+    if logo_elem:
+        header_table = Table([[logo_elem, clinic_para]], colWidths=[(max_logo_w + 6), None])
+    else:
+        header_table = Table([[clinic_para]], colWidths=[None])
+
+    header_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0b5ed7')),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('LEFTPADDING', (0,0), (-1,-1), 8),
+        ('RIGHTPADDING', (0,0), (-1,-1), 8),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+    ]))
+    if logo_elem:
+        header_table.setStyle(TableStyle([('TEXTCOLOR', (1,0), (1,0), colors.white)]))
+
+    story.append(header_table)
+    story.append(Spacer(1, 12))
+
+    story.append(Paragraph('ORDEN DE ANÁLISIS', ParagraphStyle('TitleCenter', parent=styles['Heading2'], alignment=TA_CENTER, fontSize=20, leading=22, spaceAfter=6)))
+    story.append(Spacer(1, 6))
+
+    try:
+        paciente_nombre = consulta.paciente.nombre_completo
+        paciente_cedula = consulta.paciente.cedula or ''
+    except Exception:
+        paciente_nombre = ''
+        paciente_cedula = ''
+    medico_nombre = consulta.medico.nombre_completo if consulta.medico else ''
+    especialidad = consulta.especialidad.nombre if consulta.especialidad else ''
+
+    info_table = Table([
+        [Paragraph('<b>Paciente:</b>', header_style), Paragraph(paciente_nombre, body_style)],
+        [Paragraph('<b>Cédula:</b>', header_style), Paragraph(paciente_cedula, body_style)],
+        [Paragraph('<b>Médico:</b>', header_style), Paragraph(medico_nombre, body_style)],
+        [Paragraph('<b>Especialidad:</b>', header_style), Paragraph(especialidad, body_style)]
+    ], colWidths=[30*mm, None])
+    info_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('BACKGROUND', (0,0), (-1,0), colors.whitesmoke),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 8))
+
+    text = orden.indicaciones or ''
+    safe_text = '<br/>'.join([line for line in text.splitlines()])
+    story.append(Paragraph(safe_text, body_style))
+    story.append(Spacer(1, 18))
+
+    # Signature
+    sig_table = Table([
+        ['', '______________________________'],
+        ['', f'{medico_nombre}']
+    ], colWidths=[None, 70*mm])
+    sig_table.setStyle(TableStyle([
+        ('ALIGN', (1,0), (1,-1), 'CENTER'),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+    ]))
+    story.append(Paragraph(f"Fecha: {consulta.fecha.strftime('%d/%m/%Y %H:%M')}", ParagraphStyle('date', parent=styles['Normal'], fontSize=9, textColor=colors.grey)))
+    story.append(Spacer(1, 8))
+    story.append(sig_table)
+
+    def _on_page(canvas_obj, doc_obj):
+        canvas_obj.saveState()
+        canvas_obj.setFont('Helvetica', 8)
+        canvas_obj.setFillColor(colors.grey)
+        footer_text = config.nombre or ''
+        canvas_obj.drawString(doc_obj.leftMargin, 10*mm, footer_text)
+        canvas_obj.drawRightString(doc_obj.pagesize[0] - doc_obj.rightMargin, 10*mm, f'Página {canvas_obj.getPageNumber()}')
+        canvas_obj.restoreState()
+
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    buffer.seek(0)
+    return send_file(buffer, mimetype='application/pdf', as_attachment=True, download_name=f'OrdenAnalisis_{consulta.id}.pdf')
+
+
+@bp.route('/consultas/<int:consulta_id>/justificativo_pdf/<int:justificativo_id>')
+@login_required
+def justificativo_pdf(consulta_id, justificativo_id):
+    """Generar PDF de Justificativo Médico"""
+    consulta = Consulta.query.get_or_404(consulta_id)
+    if current_user.rol == 'medico' and current_user.medico:
+        if consulta.medico_id != current_user.medico.id:
+            abort(403)
+
+    justificativo = OrdenEstudio.query.filter_by(id=justificativo_id, consulta_id=consulta_id, tipo='justificativo').first_or_404()
+
+    from app.models import ConfiguracionConsultorio
+    config = ConfiguracionConsultorio.get_configuracion()
+
+    # Generar PDF con Platypus
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            leftMargin=25*mm, rightMargin=25*mm,
+                            topMargin=20*mm, bottomMargin=20*mm)
+    styles = getSampleStyleSheet()
+    normal = styles['Normal']
+    normal.leading = 14
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], alignment=TA_CENTER, fontSize=16, leading=18)
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], fontSize=10, leading=12)
+    body_style = ParagraphStyle('Body', parent=styles['Normal'], fontSize=11, leading=14)
+
+    story = []
+
+    # Timestamp (small)
+    timestamp = consulta.fecha.strftime('%d/%m/%Y, %H:%M')
+    story.append(Paragraph(f'<font size=8 color="#444444">{timestamp}</font>', ParagraphStyle('ts', parent=styles['Normal'], alignment=TA_LEFT)))
+    story.append(Spacer(1, 6))
+
+    # Clinic header
+    logo_path = _resolve_logo_path(config)
+    logo_elem = None
+    max_logo_w = 50 * mm
+    max_logo_h = 30 * mm
+    if logo_path:
+        try:
+            img_reader = ImageReader(logo_path)
+            iw, ih = img_reader.getSize()
+            ratio = min((max_logo_w) / float(iw), (max_logo_h) / float(ih))
+            if ratio <= 0 or ratio > 10:
+                ratio = min(max_logo_w / float(iw if iw else 1), max_logo_h / float(ih if ih else 1))
+            w = iw * ratio
+            h = ih * ratio
+            logo_elem = RLImage(logo_path, width=w, height=h)
+        except Exception:
+            logo_elem = None
+
+    clinic_html = f"<b>{config.nombre or 'Consultorio Médico'}</b><br/><font size=9>{(config.direccion or '')}<br/>Tel: {config.telefono or ''} &nbsp;&nbsp; RUC: {config.ruc or ''}</font>"
+    clinic_para = Paragraph(clinic_html, ParagraphStyle('Clinic', parent=styles['Normal'], fontSize=10, leading=12, textColor=colors.white))
+
+    if logo_elem:
+        header_table = Table([[logo_elem, clinic_para]], colWidths=[(max_logo_w + 6), None])
+    else:
+        header_table = Table([[clinic_para]], colWidths=[None])
+
+    header_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0b5ed7')),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('LEFTPADDING', (0,0), (-1,-1), 8),
+        ('RIGHTPADDING', (0,0), (-1,-1), 8),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+    ]))
+    if logo_elem:
+        header_table.setStyle(TableStyle([('TEXTCOLOR', (1,0), (1,0), colors.white)]))
+
+    story.append(header_table)
+    story.append(Spacer(1, 12))
+
+    story.append(Paragraph('JUSTIFICATIVO MÉDICO', ParagraphStyle('TitleCenter', parent=styles['Heading2'], alignment=TA_CENTER, fontSize=20, leading=22, spaceAfter=6)))
+    story.append(Spacer(1, 6))
+
+    try:
+        paciente_nombre = consulta.paciente.nombre_completo
+        paciente_cedula = consulta.paciente.cedula or ''
+    except Exception:
+        paciente_nombre = ''
+        paciente_cedula = ''
+    medico_nombre = consulta.medico.nombre_completo if consulta.medico else ''
+    especialidad = consulta.especialidad.nombre if consulta.especialidad else ''
+
+    info_table = Table([
+        [Paragraph('<b>Paciente:</b>', header_style), Paragraph(paciente_nombre, body_style)],
+        [Paragraph('<b>Cédula:</b>', header_style), Paragraph(paciente_cedula, body_style)],
+        [Paragraph('<b>Médico:</b>', header_style), Paragraph(medico_nombre, body_style)],
+        [Paragraph('<b>Especialidad:</b>', header_style), Paragraph(especialidad, body_style)]
+    ], colWidths=[30*mm, None])
+    info_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('BACKGROUND', (0,0), (-1,0), colors.whitesmoke),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 8))
+
+    text = justificativo.descripcion or ''
+    safe_text = '<br/>'.join([line for line in text.splitlines()])
+    story.append(Paragraph(safe_text, body_style))
+    story.append(Spacer(1, 18))
+
+    # Signature
+    sig_table = Table([
+        ['', '______________________________'],
+        ['', f'{medico_nombre}']
+    ], colWidths=[None, 70*mm])
+    sig_table.setStyle(TableStyle([
+        ('ALIGN', (1,0), (1,-1), 'CENTER'),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+    ]))
+    story.append(Paragraph(f"Fecha: {consulta.fecha.strftime('%d/%m/%Y %H:%M')}", ParagraphStyle('date', parent=styles['Normal'], fontSize=9, textColor=colors.grey)))
+    story.append(Spacer(1, 8))
+    story.append(sig_table)
+
+    def _on_page(canvas_obj, doc_obj):
+        canvas_obj.saveState()
+        canvas_obj.setFont('Helvetica', 8)
+        canvas_obj.setFillColor(colors.grey)
+        footer_text = config.nombre or ''
+        canvas_obj.drawString(doc_obj.leftMargin, 10*mm, footer_text)
+        canvas_obj.drawRightString(doc_obj.pagesize[0] - doc_obj.rightMargin, 10*mm, f'Página {canvas_obj.getPageNumber()}')
+        canvas_obj.restoreState()
+
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    buffer.seek(0)
+    return send_file(buffer, mimetype='application/pdf', as_attachment=True, download_name=f'Justificativo_{consulta.id}.pdf')
+
+
 @bp.route('/consultas/receta_preview_pdf', methods=['POST'])
 @login_required
 def receta_preview_pdf():
@@ -1045,7 +1351,7 @@ def listar_insumos():
     # Parámetros de búsqueda
     busqueda = request.args.get('busqueda', '').strip()
 
-    base_q = Insumo.query.filter_by(activo=True)
+    base_q = Insumo.query
 
     if busqueda:
         term = f"%{busqueda}%"
@@ -1276,7 +1582,11 @@ def editar_insumo(id):
 
     if request.method == 'POST':
         insumo.nombre = request.form.get('nombre', insumo.nombre).strip()
-        insumo.descripcion = request.form.get('descripcion', insumo.descripcion).strip()
+        descripcion_nueva = request.form.get('descripcion', '').strip()
+        if descripcion_nueva and descripcion_nueva != 'None':
+            insumo.descripcion = descripcion_nueva
+        elif not descripcion_nueva:
+            insumo.descripcion = None
         try:
             from app.utils.number_utils import parse_decimal_from_form
             insumo.precio_compra = parse_decimal_from_form(request.form.get('precio_compra', str(insumo.precio_compra)) or str(insumo.precio_compra)) or insumo.precio_compra

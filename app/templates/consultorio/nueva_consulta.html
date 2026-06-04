@@ -7,8 +7,12 @@
     <!-- Información del Paciente (Sidebar) -->
     <div class="col-md-3">
         <div class="card mb-3">
-            <div class="card-header bg-primary text-white">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="bi bi-person-circle"></i> Paciente</h5>
+                <a href="{{ url_for('agendamiento.ver_paciente', id=cita.paciente.id) }}" 
+                   class="btn btn-sm btn-light" title="Ver ficha completa del paciente" target="_blank">
+                    <i class="bi bi-file-earmark-medical"></i> Ficha
+                </a>
             </div>
             <div class="card-body">
                 <h6><strong>{{ cita.paciente.nombre_completo }}</strong></h6>
@@ -25,6 +29,28 @@
                 {% if cita.paciente.email %}
                 <p class="mb-1"><strong>Email:</strong> {{ cita.paciente.email }}</p>
                 {% endif %}
+            </div>
+        </div>
+
+        <!-- Resumen del Paciente -->
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="bi bi-file-text"></i> Resumen del Paciente</h6>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-6">Fecha de nacimiento</dt>
+                    <dd class="col-sm-6"><small>{{ cita.paciente.fecha_nacimiento.strftime('%d/%m/%Y') if cita.paciente.fecha_nacimiento else '-' }}</small></dd>
+
+                    <dt class="col-sm-6">Tipo de sangre</dt>
+                    <dd class="col-sm-6"><small>{{ cita.paciente.tipo_sangre or '-' }}</small></dd>
+
+                    <dt class="col-sm-6">Dirección</dt>
+                    <dd class="col-sm-6"><small>{{ cita.paciente.direccion or '-' }}</small></dd>
+
+                    <dt class="col-sm-6">Ciudad</dt>
+                    <dd class="col-sm-6"><small>{{ cita.paciente.ciudad or '-' }}</small></dd>
+                </dl>
             </div>
         </div>
 
@@ -127,11 +153,14 @@
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="mb-0"><i class="bi bi-prescription2"></i> Receta Médica</h5>
                         <div>
-                            <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#modalReceta">
+                            <button type="button" id="btnCrearEditarReceta" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#modalReceta">
                                 <i class="bi bi-file-earmark-medical"></i> Crear Receta
                             </button>
-                            <button type="button" id="btnPrintReceta" class="btn btn-outline-secondary" style="display:none;" title="Imprimir receta" onclick="printRecetaPreview()">
+                            <button type="button" id="btnPrintReceta" class="btn btn-outline-secondary me-2" style="display:none;" title="Imprimir receta" onclick="printRecetaPreview()">
                                 <i class="bi bi-printer"></i>
+                            </button>
+                            <button type="button" id="btnDeleteReceta" class="btn btn-outline-danger" style="display:none;" title="Eliminar receta" onclick="eliminarReceta()">
+                                <i class="bi bi-trash"></i>
                             </button>
                         </div>
                     </div>
@@ -145,11 +174,14 @@
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> Órdenes de Estudios</h5>
                         <div>
-                            <button type="button" class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#modalOrden">
+                            <button type="button" id="btnCrearEditarOrden" class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#modalOrden">
                                 <i class="bi bi-clipboard2-plus"></i> Crear Orden
                             </button>
-                            <button type="button" id="btnPrintOrden" class="btn btn-outline-secondary" style="display:none;" title="Imprimir orden" onclick="printOrdenPreview()">
+                            <button type="button" id="btnPrintOrden" class="btn btn-outline-secondary me-2" style="display:none;" title="Imprimir orden" onclick="printOrdenPreview()">
                                 <i class="bi bi-printer"></i>
+                            </button>
+                            <button type="button" id="btnDeleteOrden" class="btn btn-outline-danger" style="display:none;" title="Eliminar orden" onclick="eliminarOrden()">
+                                <i class="bi bi-trash"></i>
                             </button>
                         </div>
                     </div>
@@ -157,6 +189,48 @@
                         <pre id="orden-texto" class="mb-0" style="white-space: pre-wrap;"></pre>
                     </div>
                     <input type="hidden" name="orden_texto" id="orden_texto_input">
+
+                    <!-- Órdenes de Análisis -->
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0"><i class="bi bi-flask"></i> Órdenes de Análisis</h5>
+                        <div>
+                            <button type="button" id="btnCrearEditarOrdenAnalisis" class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#modalOrdenAnalisis">
+                                <i class="bi bi-flask-fill"></i> Crear Orden de Análisis
+                            </button>
+                            <button type="button" id="btnPrintOrdenAnalisis" class="btn btn-outline-secondary me-2" style="display:none;" title="Imprimir orden de análisis" onclick="printOrdenAnalisisPreview()">
+                                <i class="bi bi-printer"></i>
+                            </button>
+                            <button type="button" id="btnDeleteOrdenAnalisis" class="btn btn-outline-danger" style="display:none;" title="Eliminar orden de análisis" onclick="eliminarOrdenAnalisis()">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="ordenes-analisis-preview" class="border rounded p-3 bg-light" style="min-height: 100px; display: none;">
+                        <pre id="ordenes-analisis-texto" class="mb-0" style="white-space: pre-wrap;"></pre>
+                    </div>
+                    <input type="hidden" name="ordenes_analisis_texto" id="ordenes_analisis_texto_input">
+
+                    <!-- Justificativo Médico -->
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0"><i class="bi bi-file-earmark-pdf"></i> Justificativo Médico</h5>
+                        <div>
+                            <button type="button" id="btnCrearEditarJustificativo" class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#modalJustificativo">
+                                <i class="bi bi-file-earmark-check"></i> Crear Justificativo
+                            </button>
+                            <button type="button" id="btnPrintJustificativo" class="btn btn-outline-secondary me-2" style="display:none;" title="Imprimir justificativo" onclick="printJustificativoPreview()">
+                                <i class="bi bi-printer"></i>
+                            </button>
+                            <button type="button" id="btnDeleteJustificativo" class="btn btn-outline-danger" style="display:none;" title="Eliminar justificativo" onclick="eliminarJustificativo()">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="justificativo-preview" class="border rounded p-3 bg-light" style="min-height: 100px; display: none;">
+                        <pre id="justificativo-texto" class="mb-0" style="white-space: pre-wrap;"></pre>
+                    </div>
+                    <input type="hidden" name="justificativo_texto" id="justificativo_texto_input">
 
                     <!-- Odontograma -->
                     <hr>
@@ -231,7 +305,7 @@
                         <a href="{{ url_for('consultorio.mis_citas_hoy') }}" class="btn btn-secondary">
                             <i class="bi bi-arrow-left"></i> Cancelar
                         </a>
-                        <button type="submit" class="btn btn-success btn-lg">
+                        <button type="button" class="btn btn-success btn-lg" onclick="mostrarModalConfirmacion()">
                             <i class="bi bi-save"></i> Guardar Consulta
                         </button>
                     </div>
@@ -485,6 +559,120 @@ Control de rutina / Evaluación metabólica"></textarea>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-primary" onclick="guardarDienteModal()">Guardar diente</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Órdenes de Análisis -->
+<div class="modal fade" id="modalOrdenAnalisis" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-flask-fill"></i> Orden de Análisis</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label"><strong>Análisis solicitados:</strong></label>
+                    <textarea class="form-control" id="ordenes-analisis-textarea" rows="15" 
+                              placeholder="Ejemplo:
+
+ANÁLISIS SOLICITADOS:
+
+1. Hemograma completo
+2. Glucemia en ayunas
+3. Perfil lipídico (Colesterol total, HDL, LDL, Triglicéridos)
+4. Función renal (Urea, Creatinina)
+5. Enzimas hepáticas (AST, ALT, Fosfatasa alcalina)
+
+INDICACIONES:
+- Realizar análisis en ayunas de 8-12 horas
+- Traer el equipo de extracción de sangre
+- Traer resultados a la próxima consulta
+
+DIAGNÓSTICO PRESUNTIVO:
+Control de rutina / Evaluación metabólica"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="guardarOrdenAnalisis()">
+                    <i class="bi bi-check-lg"></i> Guardar Orden de Análisis
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Justificativo Médico -->
+<div class="modal fade" id="modalJustificativo" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="bi bi-file-earmark-check"></i> Justificativo Médico</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label"><strong>Justificativo:</strong></label>
+                    <textarea class="form-control" id="justificativo-textarea" rows="15" 
+                              placeholder="Ejemplo:
+
+JUSTIFICATIVO MÉDICO
+
+Paciente: _____________________
+Cédula: _____________________
+Fecha: _____________________
+
+Por este medio se justifica que el paciente antes mencionado:
+
+_____________________________________________________
+_____________________________________________________
+_____________________________________________________
+
+Debiendo ausentarse o guardar reposo durante:
+_____ Día(s) / _____ Hora(s)
+
+Desde: ________________  Hasta: ________________
+
+Indicaciones generales:
+- Reposo relativo
+- Evitar actividad física
+- Control en _____ días
+
+Médico: _____________________
+Cédula Profesional: _____________________
+Especialidad: _____________________
+Firma: _____________________"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" onclick="guardarJustificativo()">
+                    <i class="bi bi-check-lg"></i> Guardar Justificativo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmación para Guardar Consulta -->
+<div class="modal fade" id="modalConfirmacion" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle"></i> Confirmación</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">¿Está seguro de que desea guardar esta consulta?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="confirmarGuardarConsulta()">
+                    <i class="bi bi-check-lg"></i> Sí, Guardar
+                </button>
             </div>
         </div>
     </div>
@@ -915,22 +1103,52 @@ function actualizarJsonHidden() {
 
 window.addEventListener('DOMContentLoaded', initOdontograma);
 
+// Modal de confirmación para guardar consulta
+function mostrarModalConfirmacion() {
+    const modal = new bootstrap.Modal(document.getElementById('modalConfirmacion'));
+    modal.show();
+}
+
+function confirmarGuardarConsulta() {
+    document.getElementById('formConsulta').submit();
+}
+
 // Guardar receta
 function guardarReceta() {
     const texto = document.getElementById('receta-textarea').value.trim();
     if (texto) {
     document.getElementById('receta-texto').textContent = texto;
         document.getElementById('receta_texto_input').value = texto;
-        // Mostrar botón imprimir para receta
-        const btn = document.getElementById('btnPrintReceta');
-        if (btn) btn.style.display = 'inline-block';
+        // Mostrar botón imprimir y eliminar para receta
+        const btnPrint = document.getElementById('btnPrintReceta');
+        const btnDelete = document.getElementById('btnDeleteReceta');
+        const btnCrear = document.getElementById('btnCrearEditarReceta');
+        if (btnPrint) btnPrint.style.display = 'inline-block';
+        if (btnDelete) btnDelete.style.display = 'inline-block';
+        if (btnCrear) btnCrear.innerHTML = '<i class="bi bi-file-earmark-medical"></i> Editar Receta';
         document.getElementById('receta-preview').style.display = 'block';
         
         // Cerrar modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('modalReceta'));
-        modal.hide();
+        const modalElement = document.getElementById('modalReceta');
+        if (modalElement) {
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) modal.hide();
+        }
     } else {
         alert('Por favor escriba la receta');
+    }
+}
+
+// Eliminar receta
+function eliminarReceta() {
+    if (confirm('¿Está seguro de que desea eliminar esta receta?')) {
+        document.getElementById('receta-textarea').value = '';
+        document.getElementById('receta-texto').textContent = '';
+        document.getElementById('receta_texto_input').value = '';
+        document.getElementById('receta-preview').style.display = 'none';
+        document.getElementById('btnPrintReceta').style.display = 'none';
+        document.getElementById('btnDeleteReceta').style.display = 'none';
+        document.getElementById('btnCrearEditarReceta').innerHTML = '<i class="bi bi-file-earmark-medical"></i> Crear Receta';
     }
 }
 
@@ -940,16 +1158,36 @@ function guardarOrden() {
     if (texto) {
     document.getElementById('orden-texto').textContent = texto;
         document.getElementById('orden_texto_input').value = texto;
-        // Mostrar botón imprimir para orden
-        const btn = document.getElementById('btnPrintOrden');
-        if (btn) btn.style.display = 'inline-block';
+        // Mostrar botón imprimir y eliminar para orden
+        const btnPrint = document.getElementById('btnPrintOrden');
+        const btnDelete = document.getElementById('btnDeleteOrden');
+        const btnCrear = document.getElementById('btnCrearEditarOrden');
+        if (btnPrint) btnPrint.style.display = 'inline-block';
+        if (btnDelete) btnDelete.style.display = 'inline-block';
+        if (btnCrear) btnCrear.innerHTML = '<i class="bi bi-clipboard2-plus"></i> Editar Orden';
         document.getElementById('orden-preview').style.display = 'block';
         
         // Cerrar modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('modalOrden'));
-        modal.hide();
+        const modalElement = document.getElementById('modalOrden');
+        if (modalElement) {
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) modal.hide();
+        }
     } else {
         alert('Por favor escriba la orden de estudios');
+    }
+}
+
+// Eliminar orden
+function eliminarOrden() {
+    if (confirm('¿Está seguro de que desea eliminar esta orden?')) {
+        document.getElementById('orden-textarea').value = '';
+        document.getElementById('orden-texto').textContent = '';
+        document.getElementById('orden_texto_input').value = '';
+        document.getElementById('orden-preview').style.display = 'none';
+        document.getElementById('btnPrintOrden').style.display = 'none';
+        document.getElementById('btnDeleteOrden').style.display = 'none';
+        document.getElementById('btnCrearEditarOrden').innerHTML = '<i class="bi bi-clipboard2-plus"></i> Crear Orden';
     }
 }
 
@@ -1051,6 +1289,142 @@ function printOrdenPreview() {
         setTimeout(function(){ URL.revokeObjectURL(url); }, 10000);
     }).catch(function(err){
         alert('No se pudo generar la orden: ' + err.message);
+    });
+}
+
+// Órdenes de Análisis
+function guardarOrdenAnalisis() {
+    const texto = document.getElementById('ordenes-analisis-textarea').value.trim();
+    if (texto) {
+        document.getElementById('ordenes-analisis-texto').textContent = texto;
+        document.getElementById('ordenes_analisis_texto_input').value = texto;
+        const btnPrint = document.getElementById('btnPrintOrdenAnalisis');
+        const btnDelete = document.getElementById('btnDeleteOrdenAnalisis');
+        const btnCrear = document.getElementById('btnCrearEditarOrdenAnalisis');
+        if (btnPrint) btnPrint.style.display = 'inline-block';
+        if (btnDelete) btnDelete.style.display = 'inline-block';
+        if (btnCrear) btnCrear.innerHTML = '<i class="bi bi-flask-fill"></i> Editar Orden de Análisis';
+        document.getElementById('ordenes-analisis-preview').style.display = 'block';
+        
+        const modalElement = document.getElementById('modalOrdenAnalisis');
+        if (modalElement) {
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) modal.hide();
+        }
+    } else {
+        alert('Por favor escriba los análisis solicitados');
+    }
+}
+
+// Eliminar orden de análisis
+function eliminarOrdenAnalisis() {
+    if (confirm('¿Está seguro de que desea eliminar esta orden de análisis?')) {
+        document.getElementById('ordenes-analisis-textarea').value = '';
+        document.getElementById('ordenes-analisis-texto').textContent = '';
+        document.getElementById('ordenes_analisis_texto_input').value = '';
+        document.getElementById('ordenes-analisis-preview').style.display = 'none';
+        document.getElementById('btnPrintOrdenAnalisis').style.display = 'none';
+        document.getElementById('btnDeleteOrdenAnalisis').style.display = 'none';
+        document.getElementById('btnCrearEditarOrdenAnalisis').innerHTML = '<i class="bi bi-flask-fill"></i> Crear Orden de Análisis';
+    }
+}
+
+function printOrdenAnalisisPreview() {
+    const texto = document.getElementById('ordenes_analisis_texto_input').value || document.getElementById('ordenes-analisis-textarea').value || '';
+    if (!texto.trim()) {
+        alert('No hay texto de orden de análisis para imprimir');
+        return;
+    }
+    const paciente = '{{ cita.paciente.nombre_completo }} - {{ cita.paciente.cedula }}';
+    const medico = '{{ cita.medico.nombre_completo if cita.medico else "" }}';
+    const payload = { texto: texto, paciente: paciente, medico: medico, cita_id: {{ cita.id }}, tipo: 'analisis' };
+    fetch('{{ url_for("consultorio.orden_preview_pdf") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+    }).then(function(resp){
+        if (!resp.ok) throw new Error('Error generando PDF');
+        return resp.blob();
+    }).then(function(blob){
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'OrdenAnalisis_Preview.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 10000);
+    }).catch(function(err){
+        alert('No se pudo generar la orden de análisis: ' + err.message);
+    });
+}
+
+// Justificativo Médico
+function guardarJustificativo() {
+    const texto = document.getElementById('justificativo-textarea').value.trim();
+    if (texto) {
+        document.getElementById('justificativo-texto').textContent = texto;
+        document.getElementById('justificativo_texto_input').value = texto;
+        const btnPrint = document.getElementById('btnPrintJustificativo');
+        const btnDelete = document.getElementById('btnDeleteJustificativo');
+        const btnCrear = document.getElementById('btnCrearEditarJustificativo');
+        if (btnPrint) btnPrint.style.display = 'inline-block';
+        if (btnDelete) btnDelete.style.display = 'inline-block';
+        if (btnCrear) btnCrear.innerHTML = '<i class="bi bi-file-earmark-check"></i> Editar Justificativo';
+        document.getElementById('justificativo-preview').style.display = 'block';
+        
+        const modalElement = document.getElementById('modalJustificativo');
+        if (modalElement) {
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) modal.hide();
+        }
+    } else {
+        alert('Por favor escriba el justificativo médico');
+    }
+}
+
+// Eliminar justificativo médico
+function eliminarJustificativo() {
+    if (confirm('¿Está seguro de que desea eliminar este justificativo?')) {
+        document.getElementById('justificativo-textarea').value = '';
+        document.getElementById('justificativo-texto').textContent = '';
+        document.getElementById('justificativo_texto_input').value = '';
+        document.getElementById('justificativo-preview').style.display = 'none';
+        document.getElementById('btnPrintJustificativo').style.display = 'none';
+        document.getElementById('btnDeleteJustificativo').style.display = 'none';
+        document.getElementById('btnCrearEditarJustificativo').innerHTML = '<i class="bi bi-file-earmark-check"></i> Crear Justificativo';
+    }
+}
+
+function printJustificativoPreview() {
+    const texto = document.getElementById('justificativo_texto_input').value || document.getElementById('justificativo-textarea').value || '';
+    if (!texto.trim()) {
+        alert('No hay texto de justificativo para imprimir');
+        return;
+    }
+    const paciente = '{{ cita.paciente.nombre_completo }} - {{ cita.paciente.cedula }}';
+    const medico = '{{ cita.medico.nombre_completo if cita.medico else "" }}';
+    const payload = { texto: texto, paciente: paciente, medico: medico, cita_id: {{ cita.id }}, tipo: 'justificativo' };
+    fetch('{{ url_for("consultorio.orden_preview_pdf") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+    }).then(function(resp){
+        if (!resp.ok) throw new Error('Error generando PDF');
+        return resp.blob();
+    }).then(function(blob){
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Justificativo_Preview.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 10000);
+    }).catch(function(err){
+        alert('No se pudo generar el justificativo: ' + err.message);
     });
 }
 </script>

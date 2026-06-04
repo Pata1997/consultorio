@@ -56,7 +56,7 @@
                                     <td><code>{{ insumo.id }}</code></td>
                                     <td>
                                         <strong>{{ insumo.nombre }}</strong>
-                                        {% if insumo.descripcion and not (current_user and current_user.rol == 'medico') %}
+                                        {% if insumo.descripcion and insumo.descripcion != 'None' and not (current_user and current_user.rol == 'medico') %}
                                             <br><small class="text-muted">{{ insumo.descripcion[:50] }}...</small>
                                         {% endif %}
                                     </td>
