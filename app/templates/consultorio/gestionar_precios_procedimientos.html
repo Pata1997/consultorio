@@ -6,8 +6,13 @@
 <div class="row">
     <div class="col-md-8">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5>Precios existentes</h5>
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="m-0">Precios existentes</h5>
+                    <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#crearProcedimientoModal">
+                        <i class="fa fa-plus"></i> Crear Procedimiento
+                    </button>
+                </div>
                 <form class="d-flex" method="get" action="{{ url_for('consultorio.gestionar_precios') }}">
                     <input type="search" name="q" value="{{ request.args.get('q','') }}" class="form-control form-control-sm me-2" placeholder="Buscar por procedimiento, médico o especialidad">
                     <button class="btn btn-sm btn-outline-secondary">Buscar</button>
@@ -30,7 +35,20 @@
                             {% for p in precios %}
                             <tr>
                                 <td>{{ p.id }}</td>
-                                <td>{{ p.procedimiento_rel.nombre if p.procedimiento_rel else p.procedimiento_id }}</td>
+                                <td>
+                                    {{ p.procedimiento_rel.nombre if p.procedimiento_rel else p.procedimiento_id }}
+                                    {% if p.procedimiento_rel %}
+                                    <button type="button" class="btn btn-xs btn-outline-secondary btn-editar-proc ms-1" 
+                                        data-id="{{ p.procedimiento_rel.id }}"
+                                        data-nombre="{{ p.procedimiento_rel.nombre }}"
+                                        data-descripcion="{{ p.procedimiento_rel.descripcion or '' }}"
+                                        data-especialidad-id="{{ p.procedimiento_rel.especialidad_id }}"
+                                        data-precio="{{ p.procedimiento_rel.precio }}"
+                                        title="Editar procedimiento">
+                                        <i class="fa fa-pencil"></i>
+                                    </button>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     {% if p.medico %}
                                         {{ p.medico.nombre }} {{ p.medico.apellido }}
@@ -335,6 +353,182 @@ document.addEventListener('DOMContentLoaded', function(){
                         .then(r=>{ if(r.redirected){ window.location = r.url; return; } return r.text(); })
                         .then(t=>{ try{ const bs = bootstrap.Modal.getInstance(modal); bs.hide(); }catch(e){} })
                         .catch(err=>{ console.error('Error guardando precio',err); alert('Error al guardar el precio'); });
+        });
+});
+</script>
+
+<!-- Modal para crear procedimiento -->
+<div class="modal fade" id="crearProcedimientoModal" tabindex="-1" aria-labelledby="crearProcedimientoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="crearProcedimientoModalLabel">Crear Procedimiento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="crearProcedimientoForm">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre del Procedimiento *</label>
+                        <input type="text" class="form-control" name="nombre" id="proc_nombre" required placeholder="Ej: Limpieza dental, Extracción">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descripción</label>
+                        <textarea class="form-control" name="descripcion" id="proc_descripcion" rows="3" placeholder="Descripción (opcional)"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Especialidad *</label>
+                        <select class="form-select" name="especialidad_id" id="proc_especialidad_id" required>
+                            <option value="">-- Seleccione --</option>
+                            {% for e in especialidades %}
+                            <option value="{{ e.id }}">{{ e.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Precio Base *</label>
+                        <input type="text" class="form-control currency-input" name="precio" id="proc_precio" required placeholder="e.g. 50000">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" id="guardarProcedimientoBtn">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para editar procedimiento -->
+<div class="modal fade" id="editarProcedimientoModal" tabindex="-1" aria-labelledby="editarProcedimientoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editarProcedimientoModalLabel">Editar Procedimiento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editarProcedimientoForm">
+                    <input type="hidden" name="id" id="edit_proc_id">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre del Procedimiento *</label>
+                        <input type="text" class="form-control" name="nombre" id="edit_proc_nombre" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descripción</label>
+                        <textarea class="form-control" name="descripcion" id="edit_proc_descripcion" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Especialidad *</label>
+                        <select class="form-select" name="especialidad_id" id="edit_proc_especialidad_id" required>
+                            <option value="">-- Seleccione --</option>
+                            {% for e in especialidades %}
+                            <option value="{{ e.id }}">{{ e.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Precio Base *</label>
+                        <input type="text" class="form-control currency-input" name="precio" id="edit_proc_precio" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" id="guardarEditarProcedimientoBtn">Guardar Cambios</button>
+                <button type="button" class="btn btn-danger" id="eliminarProcedimientoBtn">Eliminar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Crear procedimiento
+document.getElementById('guardarProcedimientoBtn').addEventListener('click', function(){
+    const form = document.getElementById('crearProcedimientoForm');
+    const fd = new FormData(form);
+    
+    fetch('{{ url_for("consultorio.crear_procedimiento") }}', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            if(data.success){
+                alert(data.mensaje);
+                bootstrap.Modal.getInstance(document.getElementById('crearProcedimientoModal')).hide();
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'No se pudo crear el procedimiento'));
+            }
+        })
+        .catch(err => { 
+            console.error(err);
+            alert('Error: ' + err.message);
+        });
+});
+
+// Editar procedimiento - click en botón de editar dentro de la tabla de precios
+document.querySelectorAll('.btn-editar-proc').forEach(btn => {
+    btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        const procId = this.dataset.id;
+        const nombre = this.dataset.nombre;
+        const descripcion = this.dataset.descripcion || '';
+        const especialidadId = this.dataset.especialidadId;
+        const precio = this.dataset.precio;
+        
+        document.getElementById('edit_proc_id').value = procId;
+        document.getElementById('edit_proc_nombre').value = nombre;
+        document.getElementById('edit_proc_descripcion').value = descripcion;
+        document.getElementById('edit_proc_especialidad_id').value = especialidadId;
+        document.getElementById('edit_proc_precio').value = precio;
+        
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('editarProcedimientoModal')).show();
+    });
+});
+
+// Guardar cambios de procedimiento
+document.getElementById('guardarEditarProcedimientoBtn').addEventListener('click', function(){
+    const procId = document.getElementById('edit_proc_id').value;
+    const form = document.getElementById('editarProcedimientoForm');
+    const fd = new FormData(form);
+    
+    fetch('{{ url_for("consultorio.editar_procedimiento", id=0) }}'.replace('/0', '/' + procId), { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            if(data.success){
+                alert(data.mensaje);
+                bootstrap.Modal.getInstance(document.getElementById('editarProcedimientoModal')).hide();
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'No se pudo actualizar el procedimiento'));
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Error: ' + err.message);
+        });
+});
+
+// Eliminar procedimiento
+document.getElementById('eliminarProcedimientoBtn').addEventListener('click', function(){
+    if(!confirm('¿Está seguro de que desea eliminar este procedimiento? Esta acción es irreversible.')){
+        return;
+    }
+    
+    const procId = document.getElementById('edit_proc_id').value;
+    
+    fetch('{{ url_for("consultorio.eliminar_procedimiento", id=0) }}'.replace('/0', '/' + procId), { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if(data.success){
+                alert(data.mensaje);
+                bootstrap.Modal.getInstance(document.getElementById('editarProcedimientoModal')).hide();
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'No se pudo eliminar el procedimiento'));
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Error: ' + err.message);
         });
 });
 </script>

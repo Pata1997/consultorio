@@ -1507,11 +1507,155 @@ def eliminar_precio(id):
         return redirect(url_for('consultorio.gestionar_precios'))
 
     pp = ProcedimientoPrecio.query.get_or_404(id)
+    proc_nombre = pp.procedimiento_rel.nombre if pp.procedimiento_rel else f'ID:{pp.procedimiento_id}'
     db.session.delete(pp)
     db.session.commit()
-    audit('eliminar', 'procedimiento_precios', pp.id, descripcion=f'Precio de procedimiento eliminado: {pp.procedimiento.nombre}')
+    audit('eliminar', 'procedimiento_precios', pp.id, descripcion=f'Precio de procedimiento eliminado: {proc_nombre}')
     flash('Precio eliminado', 'success')
     return redirect(url_for('consultorio.gestionar_precios'))
+
+
+@bp.route('/procedimiento/crear', methods=['POST'])
+@login_required
+def crear_procedimiento():
+    """Crear un nuevo procedimiento (JSON response para modal/AJAX)"""
+    if current_user.rol != 'admin':
+        return {'error': 'No tiene permiso'}, 403
+    
+    try:
+        nombre = request.form.get('nombre', '').strip()
+        descripcion = request.form.get('descripcion', '').strip()
+        especialidad_id = request.form.get('especialidad_id', '').strip()
+        from app.utils.number_utils import parse_decimal_from_form
+        precio_raw = request.form.get('precio', '0')
+        precio = parse_decimal_from_form(precio_raw) or Decimal('0')
+        
+        if not nombre:
+            return {'error': 'El nombre del procedimiento es requerido'}, 400
+        
+        if not especialidad_id or not especialidad_id.isdigit():
+            return {'error': 'La especialidad es requerida'}, 400
+        
+        especialidad_id = int(especialidad_id)
+        
+        # Verificar que la especialidad existe
+        especialidad = Especialidad.query.get(especialidad_id)
+        if not especialidad:
+            return {'error': 'Especialidad no encontrada'}, 404
+        
+        # Crear procedimiento
+        nuevo_proc = Procedimiento(
+            nombre=nombre,
+            descripcion=descripcion if descripcion else None,
+            especialidad_id=especialidad_id,
+            precio=precio,
+            activo=True
+        )
+        db.session.add(nuevo_proc)
+        db.session.commit()
+        
+        audit('crear', 'procedimientos', nuevo_proc.id, descripcion=f'Procedimiento creado: {nuevo_proc.nombre}')
+        
+        return {
+            'success': True,
+            'id': nuevo_proc.id,
+            'nombre': nuevo_proc.nombre,
+            'descripcion': nuevo_proc.descripcion,
+            'especialidad_id': nuevo_proc.especialidad_id,
+            'precio': float(nuevo_proc.precio),
+            'mensaje': 'Procedimiento creado correctamente'
+        }, 201
+    except Exception as e:
+        return {'error': f'Error al crear procedimiento: {str(e)}'}, 500
+
+
+@bp.route('/procedimiento/<int:id>/editar', methods=['POST'])
+@login_required
+def editar_procedimiento(id):
+    """Editar un procedimiento existente (JSON response)"""
+    if current_user.rol != 'admin':
+        return {'error': 'No tiene permiso'}, 403
+    
+    try:
+        proc = Procedimiento.query.get_or_404(id)
+        
+        nombre = request.form.get('nombre', '').strip()
+        descripcion = request.form.get('descripcion', '').strip()
+        especialidad_id = request.form.get('especialidad_id', '').strip()
+        from app.utils.number_utils import parse_decimal_from_form
+        precio_raw = request.form.get('precio', str(proc.precio))
+        precio = parse_decimal_from_form(precio_raw) or proc.precio
+        
+        if nombre:
+            proc.nombre = nombre
+        if descripcion:
+            proc.descripcion = descripcion
+        elif descripcion == '':
+            proc.descripcion = None
+        
+        if especialidad_id and especialidad_id.isdigit():
+            especialidad_id_int = int(especialidad_id)
+            especialidad = Especialidad.query.get(especialidad_id_int)
+            if especialidad:
+                proc.especialidad_id = especialidad_id_int
+        
+        if precio:
+            proc.precio = precio
+        
+        db.session.commit()
+        
+        audit('editar', 'procedimientos', proc.id, descripcion=f'Procedimiento actualizado: {proc.nombre}')
+        
+        return {
+            'success': True,
+            'id': proc.id,
+            'nombre': proc.nombre,
+            'descripcion': proc.descripcion,
+            'especialidad_id': proc.especialidad_id,
+            'precio': float(proc.precio),
+            'mensaje': 'Procedimiento actualizado correctamente'
+        }, 200
+    except Exception as e:
+        return {'error': f'Error al editar procedimiento: {str(e)}'}, 500
+
+
+@bp.route('/procedimiento/<int:id>/eliminar', methods=['POST'])
+@login_required
+def eliminar_procedimiento(id):
+    """Eliminar un procedimiento (JSON response)"""
+    if current_user.rol != 'admin':
+        return {'error': 'No tiene permiso'}, 403
+    
+    try:
+        proc = Procedimiento.query.get_or_404(id)
+        nombre_proc = proc.nombre
+        
+        # Verificar si el procedimiento está siendo usado en precios
+        precios_asociados = ProcedimientoPrecio.query.filter_by(procedimiento_id=id).count()
+        if precios_asociados > 0:
+            return {
+                'error': f'No se puede eliminar. Este procedimiento tiene {precios_asociados} precio(s) asociado(s)'
+            }, 400
+        
+        # Verificar si el procedimiento está siendo usado en consultas
+        consultas_asociadas = ConsultaProcedimiento.query.filter_by(procedimiento_id=id).count()
+        if consultas_asociadas > 0:
+            return {
+                'error': f'No se puede eliminar. Este procedimiento está registrado en {consultas_asociadas} consulta(s)'
+            }, 400
+        
+        db.session.delete(proc)
+        db.session.commit()
+        
+        audit('eliminar', 'procedimientos', id, descripcion=f'Procedimiento eliminado: {nombre_proc}')
+        
+        return {
+            'success': True,
+            'mensaje': 'Procedimiento eliminado correctamente'
+        }, 200
+    except Exception as e:
+        return {'error': f'Error al eliminar procedimiento: {str(e)}'}, 500
+
 
 @bp.route('/insumos/<int:id>/movimientos')
 @login_required
