@@ -4,7 +4,8 @@ from app import db
 from app.models import (Consulta, Cita, Paciente, Insumo, Procedimiento, Receta, 
                         ConsultaInsumo, ConsultaProcedimiento, OrdenEstudio,
                         InsumoEspecialidad, MovimientoInsumo,
-                        ProcedimientoPrecio, Odontograma, Medico, Especialidad, MedicoEspecialidad)
+                        ProcedimientoPrecio, Odontograma, Medico, Especialidad, MedicoEspecialidad,
+                        TratamientoSesionProcedimiento)
 from app.utils.auditoria import audit
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -806,10 +807,18 @@ def nueva_consulta(cita_id):
             activo=True
         ).order_by(Procedimiento.nombre).all()
     else:
-        procedimientos_disponibles = Procedimiento.query.filter_by(
-            especialidad_id=cita.especialidad_id,
-            activo=True
-        ).all()
+        procedimientos_con_precio = db.session.query(
+            ProcedimientoPrecio.procedimiento_id
+        ).filter(
+            ProcedimientoPrecio.especialidad_id == cita.especialidad_id
+        )
+        procedimientos_disponibles = Procedimiento.query.filter(
+            Procedimiento.activo == True,
+            db.or_(
+                Procedimiento.especialidad_id == cita.especialidad_id,
+                Procedimiento.id.in_(procedimientos_con_precio)
+            )
+        ).order_by(Procedimiento.nombre).all()
 
     # Cargar último odontograma del paciente para historial clínico continuo
     ultimo_odontograma = Odontograma.query.filter_by(
@@ -1534,7 +1543,7 @@ def gestionar_precios():
     q = request.args.get('q', '').strip()
 
     # Datos auxiliares
-    procedimientos = Procedimiento.query.order_by(Procedimiento.nombre).all()
+    procedimientos = Procedimiento.query.filter_by(activo=True).order_by(Procedimiento.nombre).all()
     medicos = Medico.query.filter_by(activo=True).order_by(Medico.nombre).all()
     especialidades = Especialidad.query.filter_by(activo=True).order_by(Especialidad.nombre).all()
 
@@ -1672,30 +1681,36 @@ def crear_procedimiento():
     try:
         nombre = request.form.get('nombre', '').strip()
         descripcion = request.form.get('descripcion', '').strip()
-        especialidad_id = request.form.get('especialidad_id', '').strip()
-        from app.utils.number_utils import parse_decimal_from_form
-        precio_raw = request.form.get('precio', '0')
-        precio = parse_decimal_from_form(precio_raw) or Decimal('0')
-        
+
         if not nombre:
             return {'error': 'El nombre del procedimiento es requerido'}, 400
-        
-        if not especialidad_id or not especialidad_id.isdigit():
-            return {'error': 'La especialidad es requerida'}, 400
-        
-        especialidad_id = int(especialidad_id)
-        
-        # Verificar que la especialidad existe
-        especialidad = Especialidad.query.get(especialidad_id)
-        if not especialidad:
-            return {'error': 'Especialidad no encontrada'}, 404
+
+        existente = Procedimiento.query.filter(
+            db.func.lower(Procedimiento.nombre) == nombre.lower()
+        ).first()
+        if existente:
+            if existente.activo:
+                return {'error': 'Ya existe un procedimiento con ese nombre'}, 400
+
+            existente.descripcion = descripcion if descripcion else None
+            existente.activo = True
+            db.session.commit()
+
+            audit('reactivar', 'procedimientos', existente.id, descripcion=f'Procedimiento reactivado: {existente.nombre}')
+            return {
+                'success': True,
+                'id': existente.id,
+                'nombre': existente.nombre,
+                'descripcion': existente.descripcion,
+                'mensaje': 'Procedimiento reactivado correctamente'
+            }, 200
         
         # Crear procedimiento
         nuevo_proc = Procedimiento(
             nombre=nombre,
             descripcion=descripcion if descripcion else None,
-            especialidad_id=especialidad_id,
-            precio=precio,
+            especialidad_id=None,
+            precio=Decimal('0'),
             activo=True
         )
         db.session.add(nuevo_proc)
@@ -1708,8 +1723,6 @@ def crear_procedimiento():
             'id': nuevo_proc.id,
             'nombre': nuevo_proc.nombre,
             'descripcion': nuevo_proc.descripcion,
-            'especialidad_id': nuevo_proc.especialidad_id,
-            'precio': float(nuevo_proc.precio),
             'mensaje': 'Procedimiento creado correctamente'
         }, 201
     except Exception as e:
@@ -1728,26 +1741,19 @@ def editar_procedimiento(id):
         
         nombre = request.form.get('nombre', '').strip()
         descripcion = request.form.get('descripcion', '').strip()
-        especialidad_id = request.form.get('especialidad_id', '').strip()
-        from app.utils.number_utils import parse_decimal_from_form
-        precio_raw = request.form.get('precio', str(proc.precio))
-        precio = parse_decimal_from_form(precio_raw) or proc.precio
-        
-        if nombre:
-            proc.nombre = nombre
-        if descripcion:
-            proc.descripcion = descripcion
-        elif descripcion == '':
-            proc.descripcion = None
-        
-        if especialidad_id and especialidad_id.isdigit():
-            especialidad_id_int = int(especialidad_id)
-            especialidad = Especialidad.query.get(especialidad_id_int)
-            if especialidad:
-                proc.especialidad_id = especialidad_id_int
-        
-        if precio:
-            proc.precio = precio
+
+        if not nombre:
+            return {'error': 'El nombre del procedimiento es requerido'}, 400
+
+        duplicado = Procedimiento.query.filter(
+            Procedimiento.id != proc.id,
+            db.func.lower(Procedimiento.nombre) == nombre.lower()
+        ).first()
+        if duplicado:
+            return {'error': 'Ya existe otro procedimiento con ese nombre'}, 400
+
+        proc.nombre = nombre
+        proc.descripcion = descripcion if descripcion else None
         
         db.session.commit()
         
@@ -1758,8 +1764,6 @@ def editar_procedimiento(id):
             'id': proc.id,
             'nombre': proc.nombre,
             'descripcion': proc.descripcion,
-            'especialidad_id': proc.especialidad_id,
-            'precio': float(proc.precio),
             'mensaje': 'Procedimiento actualizado correctamente'
         }, 200
     except Exception as e:
@@ -1777,20 +1781,18 @@ def eliminar_procedimiento(id):
         proc = Procedimiento.query.get_or_404(id)
         nombre_proc = proc.nombre
         
-        # Verificar si el procedimiento está siendo usado en precios
-        precios_asociados = ProcedimientoPrecio.query.filter_by(procedimiento_id=id).count()
-        if precios_asociados > 0:
-            return {
-                'error': f'No se puede eliminar. Este procedimiento tiene {precios_asociados} precio(s) asociado(s)'
-            }, 400
-        
-        # Verificar si el procedimiento está siendo usado en consultas
         consultas_asociadas = ConsultaProcedimiento.query.filter_by(procedimiento_id=id).count()
-        if consultas_asociadas > 0:
+        tratamientos_asociados = TratamientoSesionProcedimiento.query.filter_by(procedimiento_id=id).count()
+        if consultas_asociadas > 0 or tratamientos_asociados > 0:
+            proc.activo = False
+            db.session.commit()
+            audit('desactivar', 'procedimientos', id, descripcion=f'Procedimiento desactivado: {nombre_proc}')
             return {
-                'error': f'No se puede eliminar. Este procedimiento está registrado en {consultas_asociadas} consulta(s)'
-            }, 400
-        
+                'success': True,
+                'mensaje': 'Procedimiento desactivado correctamente porque ya tiene historial'
+            }, 200
+
+        ProcedimientoPrecio.query.filter_by(procedimiento_id=id).delete()
         db.session.delete(proc)
         db.session.commit()
         
@@ -1977,7 +1979,6 @@ def api_procedimientos_por_medico(medico_id):
         return jsonify([])
 
     procedimientos = Procedimiento.query.filter(
-        Procedimiento.especialidad_id.in_(especialidad_ids),
         Procedimiento.activo == True
     ).order_by(Procedimiento.nombre).all()
 

@@ -42,8 +42,6 @@
                                         data-id="{{ p.procedimiento_rel.id }}"
                                         data-nombre="{{ p.procedimiento_rel.nombre }}"
                                         data-descripcion="{{ p.procedimiento_rel.descripcion or '' }}"
-                                        data-especialidad-id="{{ p.procedimiento_rel.especialidad_id }}"
-                                        data-precio="{{ p.procedimiento_rel.precio }}"
                                         title="Editar procedimiento">
                                         <i class="fa fa-pencil"></i>
                                     </button>
@@ -142,6 +140,7 @@ document.addEventListener('DOMContentLoaded', function(){
     const especialidadSelect = document.getElementById('especialidad_select');
     const medicoSelect = document.getElementById('medico_select');
     const procedimientoSelect = document.getElementById('procedimiento_select');
+    window.procedimientoOptionsIniciales = Array.from(procedimientoSelect.querySelectorAll('option')).map(o => o.cloneNode(true));
 
     function clearSelect(sel, placeholderText){
         sel.innerHTML = '';
@@ -151,17 +150,22 @@ document.addEventListener('DOMContentLoaded', function(){
         sel.appendChild(opt);
     }
 
+    function restaurarProcedimientos(){
+        procedimientoSelect.innerHTML = '';
+        window.procedimientoOptionsIniciales.forEach(opt => procedimientoSelect.appendChild(opt.cloneNode(true)));
+    }
+
     especialidadSelect.addEventListener('change', function(){
         const espId = this.value;
         clearSelect(medicoSelect, '-- Ninguno --');
         // deshabilitar mientras carga
         medicoSelect.disabled = true;
-        // limpiar procedimientos para forzar nueva selección del médico
-        clearSelect(procedimientoSelect, '-- Seleccione --');
+        restaurarProcedimientos();
 
         if(!espId){
             // si se deseleccionó, permitir seleccionar médico manualmente desde la lista original
             medicoSelect.disabled = true;
+            restaurarProcedimientos();
             return;
         }
 
@@ -190,7 +194,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
     medicoSelect.addEventListener('change', function(){
         const medId = this.value;
-        clearSelect(procedimientoSelect, '-- Seleccione --');
+        restaurarProcedimientos();
 
         if(!medId){
             // dejar los procedimientos globales si no hay médico seleccionado
@@ -357,171 +361,198 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 </script>
 
-<!-- Modal para crear procedimiento -->
+<!-- Modal para administrar procedimientos -->
 <div class="modal fade" id="crearProcedimientoModal" tabindex="-1" aria-labelledby="crearProcedimientoModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="crearProcedimientoModalLabel">Crear Procedimiento</h5>
+                <h5 class="modal-title" id="crearProcedimientoModalLabel">Procedimientos</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
                 <form id="crearProcedimientoForm">
+                    <input type="hidden" name="id" id="proc_id">
                     <div class="mb-3">
                         <label class="form-label">Nombre del Procedimiento *</label>
-                        <input type="text" class="form-control" name="nombre" id="proc_nombre" required placeholder="Ej: Limpieza dental, Extracción">
+                        <input type="text" class="form-control" name="nombre" id="proc_nombre" required placeholder="Ej: Limpieza dental, Extraccion">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Descripción</label>
-                        <textarea class="form-control" name="descripcion" id="proc_descripcion" rows="3" placeholder="Descripción (opcional)"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Especialidad *</label>
-                        <select class="form-select" name="especialidad_id" id="proc_especialidad_id" required>
-                            <option value="">-- Seleccione --</option>
-                            {% for e in especialidades %}
-                            <option value="{{ e.id }}">{{ e.nombre }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Precio Base *</label>
-                        <input type="text" class="form-control currency-input" name="precio" id="proc_precio" required placeholder="e.g. 50000">
+                        <label class="form-label">Descripcion</label>
+                        <textarea class="form-control" name="descripcion" id="proc_descripcion" rows="3" placeholder="Descripcion (opcional)"></textarea>
                     </div>
                 </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                <button type="button" class="btn btn-primary" id="guardarProcedimientoBtn">Guardar</button>
-            </div>
-        </div>
-    </div>
-</div>
+                <div class="d-flex gap-2 justify-content-end mb-3">
+                    <button type="button" class="btn btn-outline-secondary" id="cancelarEditarProcedimientoBtn" style="display:none">Cancelar edicion</button>
+                    <button type="button" class="btn btn-primary" id="guardarProcedimientoBtn">Crear</button>
+                </div>
 
-<!-- Modal para editar procedimiento -->
-<div class="modal fade" id="editarProcedimientoModal" tabindex="-1" aria-labelledby="editarProcedimientoModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editarProcedimientoModalLabel">Editar Procedimiento</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-            </div>
-            <div class="modal-body">
-                <form id="editarProcedimientoForm">
-                    <input type="hidden" name="id" id="edit_proc_id">
-                    <div class="mb-3">
-                        <label class="form-label">Nombre del Procedimiento *</label>
-                        <input type="text" class="form-control" name="nombre" id="edit_proc_nombre" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Descripción</label>
-                        <textarea class="form-control" name="descripcion" id="edit_proc_descripcion" rows="3"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Especialidad *</label>
-                        <select class="form-select" name="especialidad_id" id="edit_proc_especialidad_id" required>
-                            <option value="">-- Seleccione --</option>
-                            {% for e in especialidades %}
-                            <option value="{{ e.id }}">{{ e.nombre }}</option>
+                <div class="table-responsive border rounded">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Procedimiento</th>
+                                <th>Descripcion</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="procedimientosCatalogoLista">
+                            {% for proc in procedimientos %}
+                            <tr data-id="{{ proc.id }}" data-nombre="{{ proc.nombre }}" data-descripcion="{{ proc.descripcion or '' }}">
+                                <td class="proc-nombre">{{ proc.nombre }}</td>
+                                <td class="proc-descripcion text-muted">{{ proc.descripcion or '-' }}</td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-primary btn-catalogo-editar">
+                                        <i class="fa fa-pencil"></i> Editar
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger btn-catalogo-eliminar">
+                                        <i class="fa fa-trash"></i> Eliminar
+                                    </button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr id="procedimientosCatalogoVacio">
+                                <td colspan="3" class="text-center text-muted">No hay procedimientos creados</td>
+                            </tr>
                             {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Precio Base *</label>
-                        <input type="text" class="form-control currency-input" name="precio" id="edit_proc_precio" required>
-                    </div>
-                </form>
+                        </tbody>
+                    </table>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                <button type="button" class="btn btn-primary" id="guardarEditarProcedimientoBtn">Guardar Cambios</button>
-                <button type="button" class="btn btn-danger" id="eliminarProcedimientoBtn">Eliminar</button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-// Crear procedimiento
-document.getElementById('guardarProcedimientoBtn').addEventListener('click', function(){
+function resetProcedimientoForm(){
+    document.getElementById('proc_id').value = '';
+    document.getElementById('proc_nombre').value = '';
+    document.getElementById('proc_descripcion').value = '';
+    document.getElementById('guardarProcedimientoBtn').textContent = 'Crear';
+    document.getElementById('cancelarEditarProcedimientoBtn').style.display = 'none';
+}
+
+function escaparHtml(valor){
+    const div = document.createElement('div');
+    div.textContent = valor || '';
+    return div.innerHTML;
+}
+
+function actualizarSelectsProcedimiento(id, nombre, eliminar){
+    window.procedimientoOptionsIniciales = window.procedimientoOptionsIniciales || [];
+    const optionBaseIndex = window.procedimientoOptionsIniciales.findIndex(opt => opt.value === String(id));
+    if(eliminar && optionBaseIndex >= 0){
+        window.procedimientoOptionsIniciales.splice(optionBaseIndex, 1);
+    } else if(!eliminar){
+        if(optionBaseIndex >= 0){
+            window.procedimientoOptionsIniciales[optionBaseIndex].textContent = nombre;
+        } else {
+            const optionBase = document.createElement('option');
+            optionBase.value = id;
+            optionBase.textContent = nombre;
+            window.procedimientoOptionsIniciales.push(optionBase);
+        }
+    }
+
+    document.querySelectorAll('select[name="procedimiento_id"]').forEach(select => {
+        let option = select.querySelector(`option[value="${id}"]`);
+        if(eliminar){
+            if(option) option.remove();
+            return;
+        }
+        if(!option){
+            option = document.createElement('option');
+            option.value = id;
+            select.appendChild(option);
+        }
+        option.textContent = nombre;
+    });
+}
+
+function filaProcedimientoHtml(proc){
+    const nombre = escaparHtml(proc.nombre);
+    const descripcion = escaparHtml(proc.descripcion || '');
+    return `
+        <tr data-id="${proc.id}" data-nombre="${nombre}" data-descripcion="${descripcion}">
+            <td class="proc-nombre">${nombre}</td>
+            <td class="proc-descripcion text-muted">${descripcion || '-'}</td>
+            <td class="text-end">
+                <button type="button" class="btn btn-sm btn-outline-primary btn-catalogo-editar">
+                    <i class="fa fa-pencil"></i> Editar
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-catalogo-eliminar">
+                    <i class="fa fa-trash"></i> Eliminar
+                </button>
+            </td>
+        </tr>`;
+}
+
+function guardarProcedimiento(){
+    const procId = document.getElementById('proc_id').value;
     const form = document.getElementById('crearProcedimientoForm');
     const fd = new FormData(form);
-    
-    fetch('{{ url_for("consultorio.crear_procedimiento") }}', { method: 'POST', body: fd })
+    const url = procId
+        ? '{{ url_for("consultorio.editar_procedimiento", id=0) }}'.replace('/0', '/' + procId)
+        : '{{ url_for("consultorio.crear_procedimiento") }}';
+
+    fetch(url, { method: 'POST', body: fd })
         .then(r => r.json())
         .then(data => {
             if(data.success){
-                alert(data.mensaje);
-                bootstrap.Modal.getInstance(document.getElementById('crearProcedimientoModal')).hide();
-                location.reload();
-            } else {
-                alert('Error: ' + (data.error || 'No se pudo crear el procedimiento'));
-            }
-        })
-        .catch(err => { 
-            console.error(err);
-            alert('Error: ' + err.message);
-        });
-});
+                const lista = document.getElementById('procedimientosCatalogoLista');
+                const vacio = document.getElementById('procedimientosCatalogoVacio');
+                if(vacio) vacio.remove();
 
-// Editar procedimiento - click en botón de editar dentro de la tabla de precios
-document.querySelectorAll('.btn-editar-proc').forEach(btn => {
-    btn.addEventListener('click', function(e){
-        e.stopPropagation();
-        const procId = this.dataset.id;
-        const nombre = this.dataset.nombre;
-        const descripcion = this.dataset.descripcion || '';
-        const especialidadId = this.dataset.especialidadId;
-        const precio = this.dataset.precio;
-        
-        document.getElementById('edit_proc_id').value = procId;
-        document.getElementById('edit_proc_nombre').value = nombre;
-        document.getElementById('edit_proc_descripcion').value = descripcion;
-        document.getElementById('edit_proc_especialidad_id').value = especialidadId;
-        document.getElementById('edit_proc_precio').value = precio;
-        
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('editarProcedimientoModal')).show();
-    });
-});
-
-// Guardar cambios de procedimiento
-document.getElementById('guardarEditarProcedimientoBtn').addEventListener('click', function(){
-    const procId = document.getElementById('edit_proc_id').value;
-    const form = document.getElementById('editarProcedimientoForm');
-    const fd = new FormData(form);
-    
-    fetch('{{ url_for("consultorio.editar_procedimiento", id=0) }}'.replace('/0', '/' + procId), { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(data => {
-            if(data.success){
-                alert(data.mensaje);
-                bootstrap.Modal.getInstance(document.getElementById('editarProcedimientoModal')).hide();
-                location.reload();
+                const proc = {
+                    id: data.id,
+                    nombre: data.nombre,
+                    descripcion: data.descripcion || ''
+                };
+                const filaActual = lista.querySelector(`tr[data-id="${proc.id}"]`);
+                if(filaActual){
+                    filaActual.outerHTML = filaProcedimientoHtml(proc);
+                } else {
+                    lista.insertAdjacentHTML('beforeend', filaProcedimientoHtml(proc));
+                }
+                actualizarSelectsProcedimiento(proc.id, proc.nombre, false);
+                resetProcedimientoForm();
             } else {
-                alert('Error: ' + (data.error || 'No se pudo actualizar el procedimiento'));
+                alert('Error: ' + (data.error || 'No se pudo guardar el procedimiento'));
             }
         })
         .catch(err => {
             console.error(err);
             alert('Error: ' + err.message);
         });
-});
+}
 
-// Eliminar procedimiento
-document.getElementById('eliminarProcedimientoBtn').addEventListener('click', function(){
-    if(!confirm('¿Está seguro de que desea eliminar este procedimiento? Esta acción es irreversible.')){
+function cargarProcedimientoEnFormulario(fila){
+    document.getElementById('proc_id').value = fila.dataset.id;
+    document.getElementById('proc_nombre').value = fila.dataset.nombre || '';
+    document.getElementById('proc_descripcion').value = fila.dataset.descripcion || '';
+    document.getElementById('guardarProcedimientoBtn').textContent = 'Guardar cambios';
+    document.getElementById('cancelarEditarProcedimientoBtn').style.display = '';
+    document.getElementById('proc_nombre').focus();
+}
+
+function eliminarProcedimiento(fila){
+    if(!confirm('Eliminar este procedimiento? Si ya tiene historial se desactivara.')){
         return;
     }
-    
-    const procId = document.getElementById('edit_proc_id').value;
-    
+    const procId = fila.dataset.id;
+
     fetch('{{ url_for("consultorio.eliminar_procedimiento", id=0) }}'.replace('/0', '/' + procId), { method: 'POST' })
         .then(r => r.json())
         .then(data => {
             if(data.success){
-                alert(data.mensaje);
-                bootstrap.Modal.getInstance(document.getElementById('editarProcedimientoModal')).hide();
-                location.reload();
+                fila.remove();
+                actualizarSelectsProcedimiento(procId, '', true);
+                resetProcedimientoForm();
+                if(!document.querySelector('#procedimientosCatalogoLista tr')){
+                    document.getElementById('procedimientosCatalogoLista').innerHTML = '<tr id="procedimientosCatalogoVacio"><td colspan="3" class="text-center text-muted">No hay procedimientos creados</td></tr>';
+                }
             } else {
                 alert('Error: ' + (data.error || 'No se pudo eliminar el procedimiento'));
             }
@@ -530,6 +561,33 @@ document.getElementById('eliminarProcedimientoBtn').addEventListener('click', fu
             console.error(err);
             alert('Error: ' + err.message);
         });
+}
+
+document.getElementById('guardarProcedimientoBtn').addEventListener('click', guardarProcedimiento);
+document.getElementById('cancelarEditarProcedimientoBtn').addEventListener('click', resetProcedimientoForm);
+document.getElementById('crearProcedimientoModal').addEventListener('hidden.bs.modal', resetProcedimientoForm);
+
+document.getElementById('procedimientosCatalogoLista').addEventListener('click', function(e){
+    const editar = e.target.closest('.btn-catalogo-editar');
+    const eliminar = e.target.closest('.btn-catalogo-eliminar');
+    const fila = e.target.closest('tr[data-id]');
+    if(!fila) return;
+
+    if(editar) cargarProcedimientoEnFormulario(fila);
+    if(eliminar) eliminarProcedimiento(fila);
+});
+
+document.querySelectorAll('.btn-editar-proc').forEach(btn => {
+    btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        const modal = document.getElementById('crearProcedimientoModal');
+        document.getElementById('proc_id').value = this.dataset.id;
+        document.getElementById('proc_nombre').value = this.dataset.nombre || '';
+        document.getElementById('proc_descripcion').value = this.dataset.descripcion || '';
+        document.getElementById('guardarProcedimientoBtn').textContent = 'Guardar cambios';
+        document.getElementById('cancelarEditarProcedimientoBtn').style.display = '';
+        bootstrap.Modal.getOrCreateInstance(modal).show();
+    });
 });
 </script>
 {% endblock %}

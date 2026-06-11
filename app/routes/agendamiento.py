@@ -537,7 +537,18 @@ def api_procedimientos_precios():
 
     from app.models import Procedimiento, ProcedimientoPrecio
 
-    procedimientos = Procedimiento.query.filter_by(especialidad_id=especialidad_id, activo=True).all()
+    procedimientos_con_precio = db.session.query(
+        ProcedimientoPrecio.procedimiento_id
+    ).filter(
+        ProcedimientoPrecio.especialidad_id == especialidad_id
+    )
+    procedimientos = Procedimiento.query.filter(
+        Procedimiento.activo == True,
+        db.or_(
+            Procedimiento.especialidad_id == especialidad_id,
+            Procedimiento.id.in_(procedimientos_con_precio)
+        )
+    ).order_by(Procedimiento.nombre).all()
     salida = []
     for p in procedimientos:
         precio = None

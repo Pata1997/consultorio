@@ -218,7 +218,7 @@ class Procedimiento(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     nombre = db.Column(db.String(200), nullable=False)
     descripcion = db.Column(db.Text)
-    precio = db.Column(db.Numeric(10, 2), nullable=False)
+    precio = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     activo = db.Column(db.Boolean, default=True)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
 
