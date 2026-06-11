@@ -2,6 +2,15 @@
 
 {% block title %}Nueva Consulta{% endblock %}
 
+{% block extra_css %}
+<style>
+/* Estilos para los items del autocomplete manual */
+.autocomplete-item:hover {
+    background-color: #f8f9fa;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <!-- Información del Paciente (Sidebar) -->
@@ -76,7 +85,18 @@
                         <small class="text-muted">{{ consulta.fecha.strftime('%d/%m/%Y') }}</small>
                         <p class="mb-0"><strong>{{ consulta.medico.nombre_completo }}</strong></p>
                         <small>{{ consulta.especialidad.nombre }}</small>
+                        {% if consulta.diagnostico %}
                         <p class="mb-0 mt-1"><strong>Dx:</strong> {{ consulta.diagnostico[:80] }}{% if consulta.diagnostico|length > 80 %}...{% endif %}</p>
+                        {% elif consulta.tratamiento_asociado %}
+                            {% set trat = consulta.tratamiento_asociado[0] if consulta.tratamiento_asociado is iterable and consulta.tratamiento_asociado is not string else consulta.tratamiento_asociado %}
+                            {% if trat and trat.diagnostico_completo %}
+                            <p class="mb-0 mt-1"><strong>Dx:</strong> {{ trat.diagnostico_completo[:80] }}{% if trat.diagnostico_completo|length > 80 %}...{% endif %}</p>
+                            {% else %}
+                            <p class="mb-0 mt-1 text-muted"><strong>Dx:</strong> No especificado</p>
+                            {% endif %}
+                        {% else %}
+                        <p class="mb-0 mt-1 text-muted"><strong>Dx:</strong> No especificado</p>
+                        {% endif %}
                         <a href="{{ url_for('consultorio.ver_consulta', id=consulta.id) }}" 
                            class="btn btn-sm btn-outline-info mt-1" target="_blank">
                             Ver completa
@@ -136,15 +156,33 @@
                     <div class="row mb-3">
                         <div class="col-md-12">
                             <label for="motivo" class="form-label">Motivo de Consulta</label>
-                            <textarea class="form-control" id="motivo" name="motivo" rows="2">{{ cita.motivo }}</textarea>
+                            <textarea class="form-control" id="motivo" name="motivo" rows="2">{{ motivo_sugerido }}</textarea>
                         </div>
                     </div>
 
                     <div class="row mb-3">
                         <div class="col-md-12">
+                            {% if sesion_actual %}
+                            <div class="alert alert-info p-3 mb-3">
+                                <h6 class="alert-heading fw-bold mb-1"><i class="bi bi-info-circle-fill"></i> Sesión {{ sesion_actual.numero_sesion }} de Tratamiento</h6>
+                                <p class="mb-0 small"><strong>Diagnóstico Maestro Original:</strong> {{ sesion_actual.tratamiento.diagnostico_completo }}</p>
+                            </div>
+                            <label for="diagnostico" class="form-label">Diagnóstico / Evolución</label>
+                            <textarea class="form-control" id="diagnostico" name="diagnostico" rows="3">{{ diagnostico_sugerido }}</textarea>
+                            {% elif cita.especialidad.nombre|lower == 'tratamiento' %}
+                            <label class="form-label">Plan de Tratamiento</label>
+                            <div class="d-grid gap-2">
+                                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalPlanTratamiento">
+                                    <i class="bi bi-calendar-plus"></i> Abrir Plan de Tratamiento
+                                </button>
+                            </div>
+                            <input type="hidden" name="plan_tratamiento_json" id="plan_tratamiento_json_input" value="">
+                            <div id="plan-tratamiento-resumen" class="mt-2 text-muted small"></div>
+                            {% else %}
                             <label for="diagnostico" class="form-label">Diagnóstico</label>
                             <textarea class="form-control" id="diagnostico" name="diagnostico" rows="3" 
                                       placeholder="Diagnóstico médico"></textarea>
+                            {% endif %}
                         </div>
                     </div>
 
@@ -254,9 +292,11 @@
                         <div class="col-md-4">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="procedimientos[]" 
-                                       value="{{ proc.id }}" id="proc{{ proc.id }}">
+                                       value="{{ proc.id }}" id="proc{{ proc.id }}"
+                                       {% if proc.id in proc_ids_sesion %}checked{% endif %}>
                                 <label class="form-check-label" for="proc{{ proc.id }}">
                                     {{ proc.nombre }}
+                                    {% if proc.id in proc_ids_sesion %}<span class="badge bg-info text-dark ms-1">Planificado</span>{% endif %}
                                 </label>
                             </div>
                         </div>
@@ -677,6 +717,79 @@ Firma: _____________________"></textarea>
         </div>
     </div>
 </div>
+
+<!-- Modal para Plan de Tratamiento -->
+<div class="modal fade" id="modalPlanTratamiento" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-calendar-plus"></i> Plan de Tratamiento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body bg-light">
+                <div class="card mb-3 shadow-sm">
+                    <div class="card-body">
+                        <label class="form-label text-primary"><strong>Diagnóstico Maestro Completo:</strong></label>
+                        <textarea class="form-control" id="plan-diagnostico" rows="3" placeholder="Ejemplo: Colocación de brackets en 4 sesiones..."></textarea>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0 text-primary"><i class="bi bi-list-ol"></i> Sesiones Programadas</h5>
+                    <button type="button" class="btn btn-success" onclick="agregarSesionTratamiento()">
+                        <i class="bi bi-plus-circle"></i> Agregar Nueva Sesión
+                    </button>
+                </div>
+                <div id="sesiones-tratamiento-container" class="row">
+                    <!-- Las sesiones se agregarán aquí dinámicamente -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarPlanTratamientoLocal()">Guardar Plan en Consulta</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<template id="template-sesion-tratamiento">
+    <div class="col-md-6 mb-3 sesion-tratamiento-item" data-sesion-id="{id}">
+        <div class="card h-100 shadow-sm border-info">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <strong>Sesión <span class="numero-sesion">{numero}</span></strong>
+                <button type="button" class="btn btn-sm btn-danger" onclick="eliminarSesionTratamiento('{id}')">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Fecha Programada</label>
+                        <input type="date" class="form-control form-control-sm sesion-fecha" required onchange="cargarHorariosDisponibles(this, '{id}')">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Hora Programada</label>
+                        <select class="form-select form-select-sm sesion-hora" required>
+                            <option value="">Seleccione fecha primero</option>
+                        </select>
+                    </div>
+                </div>
+                <h6 class="small fw-bold">Procedimientos para esta sesión:</h6>
+                <ul class="list-group list-group-flush mb-2 sesion-procedimientos-container">
+                    <!-- Procedimientos dinámicos -->
+                </ul>
+                <div class="position-relative">
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control sesion-proc-search" placeholder="Escribir para buscar procedimiento..." autocomplete="off">
+                        <button class="btn btn-outline-primary btn-agregar-proc" type="button" onclick="agregarProcedimientoSesion('{id}')" disabled><i class="bi bi-plus"></i></button>
+                    </div>
+                    <input type="hidden" class="sesion-proc-id">
+                    <input type="hidden" class="sesion-proc-precio">
+                    <div class="autocomplete-results shadow-sm border rounded bg-white position-absolute w-100" style="display:none; z-index:1000; max-height:150px; overflow-y:auto; top:100%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
 
 <style>
 /* ===== MODAL ===== */
@@ -1427,5 +1540,337 @@ function printJustificativoPreview() {
         alert('No se pudo generar el justificativo: ' + err.message);
     });
 }
+
+// ==========================================
+// LÓGICA DE PLAN DE TRATAMIENTO
+// ==========================================
+let contadorSesiones = 0;
+
+function agregarSesionTratamiento() {
+    contadorSesiones++;
+    const container = document.getElementById('sesiones-tratamiento-container');
+    const template = document.getElementById('template-sesion-tratamiento').innerHTML;
+    
+    // Replace {id} with a unique ID and {numero} with the session number
+    const uniqueId = 'sesion_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    let html = template.replace(/{id}/g, uniqueId).replace(/{numero}/g, contadorSesiones);
+    
+    // Create a temporary wrapper to append safely
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    container.appendChild(temp.firstElementChild);
+    actualizarNumerosSesion();
+}
+
+function cargarHorariosDisponibles(inputFecha, sesionId) {
+    const fecha = inputFecha.value;
+    const selectHora = document.querySelector(`.sesion-tratamiento-item[data-sesion-id="${sesionId}"] .sesion-hora`);
+    
+    if (!fecha) {
+        selectHora.innerHTML = '<option value="">Seleccione fecha primero</option>';
+        return;
+    }
+    
+    const medicoId = '{{ cita.medico_id }}';
+    selectHora.innerHTML = '<option value="">Cargando horarios...</option>';
+    
+    fetch(`/agendamiento/api/disponibilidad-semanal/${medicoId}?fecha=${fecha}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Error en red');
+            return response.json();
+        })
+        .then(data => {
+            selectHora.innerHTML = '<option value="">Seleccione hora...</option>';
+            if (!data.calendario) {
+                selectHora.innerHTML = '<option value="">Sin disponibilidad</option>';
+                return;
+            }
+            
+            const diaSeleccionado = data.calendario.find(dia => dia.fecha === fecha);
+            
+            if (!diaSeleccionado || !diaSeleccionado.trabaja || diaSeleccionado.en_vacaciones || !diaSeleccionado.slots || diaSeleccionado.slots.length === 0) {
+                selectHora.innerHTML = '<option value="">Sin disponibilidad ese día</option>';
+                return;
+            }
+            
+            let hayHorarios = false;
+            diaSeleccionado.slots.forEach(slot => {
+                if (slot.estado === 'disponible') {
+                    const option = document.createElement('option');
+                    option.value = slot.hora;
+                    option.textContent = slot.hora;
+                    selectHora.appendChild(option);
+                    hayHorarios = true;
+                }
+            });
+            
+            if(!hayHorarios) {
+                selectHora.innerHTML = '<option value="">Sin horarios disponibles</option>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            selectHora.innerHTML = '<option value="">Error cargando</option>';
+        });
+}
+
+function eliminarSesionTratamiento(id) {
+    const el = document.querySelector(`.sesion-tratamiento-item[data-sesion-id="${id}"]`);
+    if(el) {
+        el.remove();
+        actualizarNumerosSesion();
+    }
+}
+
+function actualizarNumerosSesion() {
+    const items = document.querySelectorAll('.sesion-tratamiento-item');
+    contadorSesiones = 0;
+    items.forEach((item, index) => {
+        contadorSesiones++;
+        item.querySelector('.numero-sesion').textContent = contadorSesiones;
+    });
+}
+
+function agregarProcedimientoSesion(id) {
+    const el = document.querySelector(`.sesion-tratamiento-item[data-sesion-id="${id}"]`);
+    const idInput = el.querySelector('.sesion-proc-id');
+    const searchInput = el.querySelector('.sesion-proc-search');
+    const precioInput = el.querySelector('.sesion-proc-precio');
+    const btnAgregar = el.querySelector('.btn-agregar-proc');
+    const container = el.querySelector('.sesion-procedimientos-container');
+    
+    if(!idInput.value) return;
+    
+    const procId = idInput.value;
+    const procNombre = searchInput.value;
+    const procPrecio = precioInput.value;
+    
+    // Check if already added
+    if(container.querySelector(`li[data-proc-id="${procId}"]`)) {
+        alert('Este procedimiento ya está agregado a esta sesión.');
+        return;
+    }
+    
+    const li = document.createElement('li');
+    li.className = 'list-group-item d-flex justify-content-between align-items-center p-1 small';
+    li.setAttribute('data-proc-id', procId);
+    li.setAttribute('data-precio', procPrecio);
+    li.innerHTML = `
+        <span>${procNombre}</span>
+        <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="this.parentElement.remove()">
+            <i class="bi bi-x-circle"></i>
+        </button>
+    `;
+    container.appendChild(li);
+    
+    searchInput.value = ''; 
+    idInput.value = '';
+    precioInput.value = '';
+    btnAgregar.disabled = true;
+}
+
+function normalizarTextoProcedimiento(valor) {
+    return (valor || '').trim().toLowerCase();
+}
+
+function resolverProcedimientoPorTexto(texto) {
+    const normalizado = normalizarTextoProcedimiento(texto);
+    if(!normalizado) return null;
+
+    let proc = procedimientosGlobales.find(p => normalizarTextoProcedimiento(p.nombre) === normalizado);
+    if(proc) return proc;
+
+    const coincidencias = procedimientosGlobales.filter(p => normalizarTextoProcedimiento(p.nombre).includes(normalizado));
+    return coincidencias.length === 1 ? coincidencias[0] : null;
+}
+
+function agregarProcedimientoSesionDesdeTexto(el) {
+    const searchInput = el.querySelector('.sesion-proc-search');
+    const idInput = el.querySelector('.sesion-proc-id');
+    const precioInput = el.querySelector('.sesion-proc-precio');
+    const container = el.querySelector('.sesion-procedimientos-container');
+    const texto = searchInput.value.trim();
+
+    if(!texto) return true;
+
+    const proc = idInput.value
+        ? { id: idInput.value, nombre: texto, precio: precioInput.value }
+        : resolverProcedimientoPorTexto(texto);
+
+    if(!proc) return false;
+
+    if(container.querySelector(`li[data-proc-id="${proc.id}"]`)) {
+        searchInput.value = '';
+        idInput.value = '';
+        precioInput.value = '';
+        return true;
+    }
+
+    const li = document.createElement('li');
+    li.className = 'list-group-item d-flex justify-content-between align-items-center p-1 small';
+    li.setAttribute('data-proc-id', proc.id);
+    li.setAttribute('data-precio', proc.precio || 0);
+    li.innerHTML = `
+        <span>${proc.nombre}</span>
+        <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="this.parentElement.remove()">
+            <i class="bi bi-x-circle"></i>
+        </button>
+    `;
+    container.appendChild(li);
+
+    searchInput.value = '';
+    idInput.value = '';
+    precioInput.value = '';
+    return true;
+}
+
+function guardarPlanTratamientoLocal() {
+    const diagnostico = document.getElementById('plan-diagnostico').value;
+    const sesionesEls = document.querySelectorAll('.sesion-tratamiento-item');
+    
+    if(!diagnostico.trim()) {
+        alert('Debe ingresar un diagnóstico maestro.');
+        return;
+    }
+    
+    const plan = {
+        diagnostico_completo: diagnostico,
+        sesiones: []
+    };
+    
+    let faltanDatos = false;
+    let sesionesSinProcedimientos = false;
+    let procedimientosSinResolver = false;
+    
+    sesionesEls.forEach((el, index) => {
+        const fecha = el.querySelector('.sesion-fecha').value;
+        const hora = el.querySelector('.sesion-hora').value;
+        if(!agregarProcedimientoSesionDesdeTexto(el)) {
+            procedimientosSinResolver = true;
+        }
+
+        const procsEls = el.querySelectorAll('.sesion-procedimientos-container li');
+        
+        if(!fecha || !hora) {
+            faltanDatos = true;
+        }
+
+        if(procsEls.length === 0) {
+            sesionesSinProcedimientos = true;
+        }
+        
+        const procedimientos = [];
+        procsEls.forEach(li => {
+            procedimientos.push({
+                procedimiento_id: li.getAttribute('data-proc-id'),
+                precio_planificado: li.getAttribute('data-precio')
+            });
+        });
+        
+        plan.sesiones.push({
+            numero_sesion: index + 1,
+            fecha_programada: fecha,
+            hora_programada: hora,
+            procedimientos: procedimientos
+        });
+    });
+    
+    if(faltanDatos) {
+        alert('Por favor, complete la fecha y hora de todas las sesiones agregadas.');
+        return;
+    }
+
+    if(procedimientosSinResolver) {
+        alert('Hay procedimientos escritos que no fueron seleccionados de la lista. Seleccione el procedimiento sugerido o use el boton +.');
+        return;
+    }
+
+    if(sesionesSinProcedimientos) {
+        alert('Cada sesion debe tener al menos un procedimiento planificado.');
+        return;
+    }
+    
+    // Save to hidden input
+    document.getElementById('plan_tratamiento_json_input').value = JSON.stringify(plan);
+    
+    // Update summary UI
+    document.getElementById('plan-tratamiento-resumen').innerHTML = `
+        <div class="alert alert-success mt-2 p-2 mb-0">
+            <strong>Plan Guardado Correctamente:</strong> ${plan.sesiones.length} sesiones configuradas.
+        </div>
+    `;
+
+    const modalEl = document.getElementById('modalPlanTratamiento');
+    const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    modal.hide();
+}
+
+// ==========================================
+// AUTOCOMPLETADO LOCAL PARA PROCEDIMIENTOS
+// ==========================================
+const procedimientosGlobales = [
+    {% for proc in procedimientos_disponibles %}
+    { id: "{{ proc.id }}", nombre: "{{ proc.nombre }}", precio: "{{ proc.get_precio_para(cita.medico_id, cita.especialidad_id)|int }}" },
+    {% endfor %}
+];
+
+document.addEventListener('input', function(e) {
+    if (e.target.classList.contains('sesion-proc-search')) {
+        const query = e.target.value.toLowerCase();
+        const container = e.target.closest('.position-relative');
+        const resultsDiv = container.querySelector('.autocomplete-results');
+        const idInput = container.querySelector('.sesion-proc-id');
+        const btnAgregar = container.querySelector('.btn-agregar-proc');
+        
+        idInput.value = ''; // Reset ID if user types something new
+        btnAgregar.disabled = true;
+        
+        if (query.length < 2) {
+            resultsDiv.style.display = 'none';
+            return;
+        }
+        
+        const filtrados = procedimientosGlobales.filter(p => p.nombre.toLowerCase().includes(query));
+        
+        if (filtrados.length === 0) {
+            resultsDiv.innerHTML = '<div class="p-2 text-muted small">No se encontraron resultados</div>';
+            resultsDiv.style.display = 'block';
+            return;
+        }
+        
+        resultsDiv.innerHTML = filtrados.map(p => `
+            <div class="p-2 border-bottom autocomplete-item" style="cursor:pointer;" data-id="${p.id}" data-nombre="${p.nombre}" data-precio="${p.precio}">
+                <div class="small fw-bold">${p.nombre}</div>
+                <div class="text-muted" style="font-size:0.75rem;">${p.precio} Gs.</div>
+            </div>
+        `).join('');
+        resultsDiv.style.display = 'block';
+    }
+});
+
+document.addEventListener('click', function(e) {
+    const item = e.target.closest('.autocomplete-item');
+    if (item) {
+        const container = item.closest('.position-relative');
+        const searchInput = container.querySelector('.sesion-proc-search');
+        const idInput = container.querySelector('.sesion-proc-id');
+        const precioInput = container.querySelector('.sesion-proc-precio');
+        const resultsDiv = container.querySelector('.autocomplete-results');
+        const btnAgregar = container.querySelector('.btn-agregar-proc');
+        
+        searchInput.value = item.getAttribute('data-nombre');
+        idInput.value = item.getAttribute('data-id');
+        precioInput.value = item.getAttribute('data-precio');
+        resultsDiv.style.display = 'none';
+        btnAgregar.disabled = false;
+        return;
+    }
+    
+    // Close dropdowns if clicking outside
+    if (!e.target.closest('.position-relative')) {
+        document.querySelectorAll('.autocomplete-results').forEach(el => el.style.display = 'none');
+    }
+});
+
 </script>
 {% endblock %}

@@ -66,6 +66,16 @@ def _resolver_precio_procedimiento(procedimiento_id, medico_id=None, especialida
     return Decimal('0')
 
 
+def _decimal_seguro(valor, default='0'):
+    """Convierte precios enviados por formulario/JSON sin abortar el guardado."""
+    try:
+        if valor in (None, ''):
+            return Decimal(default)
+        return Decimal(str(valor))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal(default)
+
+
 def _procesar_procedimientos_odontograma(consulta, odontograma_datos):
     """Convierte los procedimientos asignados a superficies trabajadas en registros ConsultaProcedimiento."""
     if not odontograma_datos or not odontograma_datos.get('dientes'):
@@ -413,6 +423,17 @@ def nueva_consulta(cita_id):
         
         db.session.add(consulta)
         db.session.flush()  # Para obtener el ID de la consulta
+
+        from app.models.consultorio import TratamientoSesion
+        sesion_actual = TratamientoSesion.query.filter_by(cita_id=cita.id).first()
+        precios_planificados = {}
+        if sesion_actual:
+            sesion_actual.consulta_realizada_id = consulta.id
+            sesion_actual.estado = 'realizada'
+            precios_planificados = {
+                proc.procedimiento_id: proc.precio_planificado
+                for proc in sesion_actual.procedimientos
+            }
         
         # Procesar receta (texto libre)
         receta_texto = request.form.get('receta_texto', '').strip()
@@ -528,11 +549,13 @@ def nueva_consulta(cita_id):
                 procedimiento = Procedimiento.query.get(int(proc_id))
                 if procedimiento:
                     # Resolver precio según regla de prioridad: médico > especialidad > base
-                    precio_resuelto = _resolver_precio_procedimiento(
-                        procedimiento_id=procedimiento.id,
-                        medico_id=consulta.medico_id,
-                        especialidad_id=consulta.especialidad_id
-                    )
+                    precio_resuelto = precios_planificados.get(procedimiento.id)
+                    if precio_resuelto is None:
+                        precio_resuelto = _resolver_precio_procedimiento(
+                            procedimiento_id=procedimiento.id,
+                            medico_id=consulta.medico_id,
+                            especialidad_id=consulta.especialidad_id
+                        )
                     
                     consulta_proc = ConsultaProcedimiento(
                         consulta_id=consulta.id,
@@ -550,6 +573,78 @@ def nueva_consulta(cita_id):
             except (ValueError, TypeError, json.JSONDecodeError):
                 current_app.logger.warning(f"[nueva_consulta] Odontograma inválido para consulta {consulta.id}")
         
+        # Procesar plan de tratamiento (si existe y la especialidad es Tratamiento)
+        plan_tratamiento_json = request.form.get('plan_tratamiento_json', '').strip()
+        if plan_tratamiento_json and cita.especialidad.nombre.lower() == 'tratamiento':
+            try:
+                datos_plan = json.loads(plan_tratamiento_json)
+                if datos_plan and datos_plan.get('sesiones'):
+                    if any(not (s_data.get('procedimientos') or []) for s_data in datos_plan['sesiones']):
+                        raise ValueError('Cada sesion del tratamiento debe tener al menos un procedimiento.')
+
+                    from app.models.consultorio import Tratamiento, TratamientoSesion, TratamientoSesionProcedimiento
+                    # Crear el Tratamiento maestro
+                    tratamiento = Tratamiento(
+                        consulta_id=consulta.id,
+                        paciente_id=consulta.paciente_id,
+                        medico_id=consulta.medico_id,
+                        diagnostico_completo=datos_plan.get('diagnostico_completo', '')
+                    )
+                    db.session.add(tratamiento)
+                    db.session.flush()
+
+                    # Iterar sobre sesiones para crear Citas y TratamientoSesion
+                    from datetime import datetime, time
+                    for s_data in datos_plan['sesiones']:
+                        fecha_prog = datetime.strptime(s_data['fecha_programada'], '%Y-%m-%d').date()
+                        hora_prog = datetime.strptime(s_data['hora_programada'], '%H:%M').time()
+                        
+                        # Crear la cita en agenda
+                        nueva_cita = Cita(
+                            paciente_id=consulta.paciente_id,
+                            medico_id=consulta.medico_id,
+                            especialidad_id=consulta.especialidad_id,
+                            fecha=fecha_prog,
+                            hora=hora_prog,
+                            motivo=f"Sesión {s_data['numero_sesion']} - Tratamiento",
+                            estado='confirmada',
+                            fecha_creacion=datetime.utcnow()
+                        )
+                        db.session.add(nueva_cita)
+                        db.session.flush()
+
+                        # Crear registro de sesión
+                        sesion = TratamientoSesion(
+                            tratamiento_id=tratamiento.id,
+                            numero_sesion=s_data['numero_sesion'],
+                            cita_id=nueva_cita.id,
+                            fecha_programada=fecha_prog,
+                            hora_programada=hora_prog,
+                            estado='programada'
+                        )
+                        db.session.add(sesion)
+                        db.session.flush()
+
+                        # Agregar procedimientos planificados a la sesión
+                        for p_data in s_data.get('procedimientos', []):
+                            precio = _decimal_seguro(p_data.get('precio_planificado'))
+                            if precio <= 0:
+                                precio = _resolver_precio_procedimiento(
+                                    procedimiento_id=int(p_data['procedimiento_id']),
+                                    medico_id=consulta.medico_id,
+                                    especialidad_id=consulta.especialidad_id
+                                )
+                                
+                            proc_plan = TratamientoSesionProcedimiento(
+                                sesion_id=sesion.id,
+                                procedimiento_id=int(p_data['procedimiento_id']),
+                                precio_planificado=precio
+                            )
+                            db.session.add(proc_plan)
+            except Exception as e:
+                current_app.logger.exception(f"[nueva_consulta] Error guardando plan de tratamiento: {e}")
+                flash(f'No se guardo el plan de tratamiento: {e}', 'warning')
+        
         # Actualizar estado de la cita a atendida
         cita.estado = 'atendida'
         
@@ -560,6 +655,14 @@ def nueva_consulta(cita_id):
 
         # Crear/actualizar venta pendiente para que la cajera la facture
         try:
+            from app.routes.facturacion import _crear_venta_pendiente_desde_consulta
+
+            _crear_venta_pendiente_desde_consulta(
+                consulta,
+                current_user.id,
+                observaciones='Venta generada automaticamente desde consulta'
+            )
+            db.session.commit()
             # ConsultaProcedimiento y ConsultaInsumo ya están importados al inicio del módulo
             # Solo importar los modelos que no están importados aún
             from app.models import Caja, Venta, VentaDetalle, ConfiguracionConsultorio
@@ -574,7 +677,7 @@ def nueva_consulta(cita_id):
 
                 # Calcular totales (sin impuestos aún)
                 especialidad = consulta.especialidad if consulta.especialidad else None
-                precio_consulta = float(especialidad.precio_consulta) if especialidad and especialidad.precio_consulta else 0
+                precio_consulta = 0 if sesion_actual else (float(especialidad.precio_consulta) if especialidad and especialidad.precio_consulta else 0)
 
                 procedimientos = ConsultaProcedimiento.query.filter_by(consulta_id=consulta.id).all()
                 total_procedimientos = sum(float(p.precio) for p in procedimientos)
@@ -613,6 +716,9 @@ def nueva_consulta(cita_id):
                 )
                 db.session.add(venta)
                 db.session.flush()
+
+                if sesion_actual:
+                    sesion_actual.venta_id = venta.id
 
                 # Agregar detalle de consulta
                 detalle = VentaDetalle(
@@ -667,6 +773,22 @@ def nueva_consulta(cita_id):
     # GET - cargar datos para el formulario
     paciente = cita.paciente
     
+    # Cargar datos de la sesión si la cita es de tratamiento
+    from app.models.consultorio import TratamientoSesion
+    sesion_actual = TratamientoSesion.query.filter_by(cita_id=cita.id).first()
+    
+    proc_ids_sesion = []
+    motivo_sugerido = cita.motivo
+    diagnostico_sugerido = ""
+    
+    if sesion_actual:
+        proc_ids_sesion = [p.procedimiento_id for p in sesion_actual.procedimientos]
+        if sesion_actual.procedimientos:
+            nombres_procs = ", ".join([p.procedimiento.nombre for p in sesion_actual.procedimientos])
+            motivo_sugerido = f"{cita.motivo}. Procedimientos planificados: {nombres_procs}"
+        
+        diagnostico_sugerido = f"Sesión {sesion_actual.numero_sesion} - {sesion_actual.tratamiento.diagnostico_completo}"
+    
     # Obtener historial del paciente (TODAS las consultas previas de TODOS los doctores)
     consultas_previas = Consulta.query.filter_by(paciente_id=paciente.id)\
         .order_by(Consulta.fecha.desc()).limit(5).all()
@@ -677,11 +799,17 @@ def nueva_consulta(cita_id):
         .filter(Insumo.cantidad_actual > 0)\
         .order_by(Insumo.nombre).all()
     
-    # Obtener procedimientos de la especialidad
-    procedimientos_disponibles = Procedimiento.query.filter_by(
-        especialidad_id=cita.especialidad_id,
-        activo=True
-    ).all()
+    # En Tratamiento se arma un plan con procedimientos de otras especialidades.
+    # En el resto de consultas mantenemos el filtro normal por especialidad.
+    if cita.especialidad.nombre.lower() == 'tratamiento':
+        procedimientos_disponibles = Procedimiento.query.filter_by(
+            activo=True
+        ).order_by(Procedimiento.nombre).all()
+    else:
+        procedimientos_disponibles = Procedimiento.query.filter_by(
+            especialidad_id=cita.especialidad_id,
+            activo=True
+        ).all()
 
     # Cargar último odontograma del paciente para historial clínico continuo
     ultimo_odontograma = Odontograma.query.filter_by(
@@ -694,7 +822,11 @@ def nueva_consulta(cita_id):
                          consultas_previas=consultas_previas,
                          insumos_disponibles=insumos_disponibles,
                          procedimientos_disponibles=procedimientos_disponibles,
-                         ultimo_odontograma_json=ultimo_odontograma_json)
+                         ultimo_odontograma_json=ultimo_odontograma_json,
+                         sesion_actual=sesion_actual,
+                         proc_ids_sesion=proc_ids_sesion,
+                         motivo_sugerido=motivo_sugerido,
+                         diagnostico_sugerido=diagnostico_sugerido)
 
 @bp.route('/consultas/<int:id>')
 @login_required
@@ -756,8 +888,23 @@ def ver_consulta(id):
     ordenes_estudios = [o for o in consulta.ordenes_estudio if o.tipo == 'estudios']
     justificativos = [o for o in consulta.ordenes_estudio if o.tipo == 'justificativo']
 
+    # Obtener el diagnóstico maestro si es parte de un tratamiento
+    diagnostico_mostrar = consulta.diagnostico
+    if consulta.tratamiento_asociado:
+        tratamiento = consulta.tratamiento_asociado[0] if isinstance(consulta.tratamiento_asociado, list) else consulta.tratamiento_asociado
+        diagnostico_mostrar = tratamiento.diagnostico_completo
+    else:
+        # Verificar si es una sesión subsecuente de un tratamiento
+        from app.models.consultorio import TratamientoSesion
+        sesion = TratamientoSesion.query.filter_by(consulta_realizada_id=consulta.id).first()
+        if not sesion and consulta.cita_id:
+            sesion = TratamientoSesion.query.filter_by(cita_id=consulta.cita_id).first()
+        if sesion and sesion.tratamiento:
+            diagnostico_mostrar = sesion.tratamiento.diagnostico_completo
+
     return render_template('consultorio/ver_consulta.html', 
                            consulta=consulta,
+                           diagnostico_mostrar=diagnostico_mostrar,
                            recetas=recetas_normales,
                            ordenes_analisis=ordenes_analisis,
                            ordenes_estudios=ordenes_estudios,

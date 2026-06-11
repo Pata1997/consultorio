@@ -127,6 +127,56 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Plan de Tratamiento (Si aplica) -->
+            {% if tratamiento %}
+            <div class="card mt-3 border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-calendar-alt"></i> Plan de Tratamiento</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small"><strong>Diagnóstico Maestro:</strong> {{ tratamiento.diagnostico_completo }}</p>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Sesión</th>
+                                    <th>Fecha</th>
+                                    <th>Estado</th>
+                                    <th>Procedimientos Planificados</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for s in tratamiento.sesiones|sort(attribute='numero_sesion') %}
+                                <tr class="{% if s.id == sesion_actual.id %}table-warning{% endif %}">
+                                    <td><strong>#{{ s.numero_sesion }}</strong> {% if s.id == sesion_actual.id %}<span class="badge bg-warning text-dark">Actual</span>{% endif %}</td>
+                                    <td>{{ s.fecha_programada.strftime('%d/%m/%Y') }}</td>
+                                    <td>
+                                        {% if s.cita.estado == 'atendida' %}
+                                            <span class="badge bg-success">Atendida</span>
+                                        {% elif s.estado == 'programada' %}
+                                            <span class="badge bg-secondary">Programada</span>
+                                        {% else %}
+                                            <span class="badge bg-info">{{ s.estado }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <ul class="list-unstyled mb-0 small">
+                                        {% for p in s.procedimientos %}
+                                            <li>- {{ p.procedimiento.nombre }}</li>
+                                        {% else %}
+                                            <li class="text-muted">Ninguno específico</li>
+                                        {% endfor %}
+                                        </ul>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Columna derecha: Forma de pago -->

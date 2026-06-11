@@ -36,6 +36,166 @@ NUNCA sumar IVA al final (eso sería IVA agregado, incorrecto para Paraguay).
 
 bp = Blueprint('facturacion', __name__, url_prefix='/facturacion')
 
+COBRO_TRATAMIENTO_PREFIX = '[COBRO_TRATAMIENTO]'
+
+
+def _metadata_cobro_tratamiento(consulta):
+    """Devuelve metadata de una consulta puente de cobro de tratamiento."""
+    observaciones = (consulta.observaciones or '').strip()
+    if not observaciones.startswith(COBRO_TRATAMIENTO_PREFIX):
+        return None
+
+    raw = observaciones[len(COBRO_TRATAMIENTO_PREFIX):].strip()
+    try:
+        return json.loads(raw) if raw else {}
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+
+
+def _resolver_precio_planificado(proc_sesion, tratamiento):
+    """Usa el precio guardado y, si esta en cero, resuelve el precio actual del procedimiento."""
+    try:
+        precio = float(proc_sesion.precio_planificado or 0)
+    except (TypeError, ValueError):
+        precio = 0
+
+    if precio > 0:
+        return precio
+
+    procedimiento = proc_sesion.procedimiento
+    if not procedimiento:
+        return 0
+
+    precio_resuelto = procedimiento.get_precio_para(
+        tratamiento.medico_id,
+        tratamiento.consulta.especialidad_id if tratamiento.consulta else None
+    )
+    proc_sesion.precio_planificado = precio_resuelto or 0
+    return float(precio_resuelto or 0)
+
+
+def _total_sesion_tratamiento(sesion):
+    return sum(
+        _resolver_precio_planificado(proc, sesion.tratamiento) * (proc.cantidad or 1)
+        for proc in sesion.procedimientos
+    )
+
+
+def _crear_venta_pendiente_desde_consulta(consulta, usuario_id, observaciones='Venta generada automaticamente desde consulta'):
+    """Crea una venta pendiente para una consulta si todavia no existe."""
+    from app.models.consultorio import ConsultaInsumo, ConsultaProcedimiento, MovimientoInsumo, TratamientoSesion
+    import time
+
+    venta_existente = Venta.query.filter_by(consulta_id=consulta.id).first()
+    if venta_existente:
+        return venta_existente
+
+    sesion_actual = TratamientoSesion.query.filter_by(consulta_realizada_id=consulta.id).first()
+    if not sesion_actual and consulta.cita_id:
+        sesion_actual = TratamientoSesion.query.filter_by(cita_id=consulta.cita_id).first()
+
+    caja = Caja.query.filter_by(estado='abierta').first()
+    paciente = consulta.paciente
+    especialidad = consulta.especialidad if consulta.especialidad else Especialidad.query.get(consulta.especialidad_id)
+    precio_consulta = 0 if sesion_actual else (float(especialidad.precio_consulta) if especialidad and especialidad.precio_consulta else 0)
+
+    procedimientos = ConsultaProcedimiento.query.filter_by(consulta_id=consulta.id).all()
+    total_procedimientos = sum(float(p.precio or 0) for p in procedimientos)
+
+    insumos = ConsultaInsumo.query.filter_by(consulta_id=consulta.id).all()
+    total_insumos = sum(float(i.subtotal or 0) for i in insumos)
+
+    total = precio_consulta + total_procedimientos + total_insumos
+    iva = total / 11
+    subtotal = total - iva
+
+    venta = Venta(
+        numero_factura=f"PEND-{consulta.id}-{int(time.time())}",
+        timbrado=None,
+        ruc_factura=paciente.ruc or paciente.cedula or '',
+        nombre_factura=paciente.razon_social or paciente.nombre_completo,
+        direccion_facturacion=paciente.direccion_facturacion or paciente.direccion or '',
+        caja_id=(caja.id if caja else None),
+        consulta_id=consulta.id,
+        paciente_id=consulta.paciente_id,
+        fecha=datetime.utcnow(),
+        subtotal=subtotal,
+        iva=iva,
+        total=total,
+        estado='pendiente',
+        usuario_registro_id=usuario_id,
+        observaciones=observaciones
+    )
+    db.session.add(venta)
+    db.session.flush()
+
+    if sesion_actual:
+        sesion_actual.venta_id = venta.id
+
+    db.session.add(VentaDetalle(
+        venta_id=venta.id,
+        concepto=f"Consulta - {especialidad.nombre if especialidad else ''}",
+        descripcion=f"Medico: {consulta.medico.nombre_completo if consulta.medico else ''}",
+        cantidad=1,
+        precio_unitario=precio_consulta,
+        subtotal=precio_consulta,
+        tipo_item='consulta'
+    ))
+
+    for proc in procedimientos:
+        db.session.add(VentaDetalle(
+            venta_id=venta.id,
+            concepto=proc.procedimiento_rel.nombre,
+            descripcion=proc.observaciones,
+            cantidad=1,
+            precio_unitario=float(proc.precio or 0),
+            subtotal=float(proc.precio or 0),
+            tipo_item='procedimiento',
+            item_id=proc.procedimiento_id
+        ))
+
+    for insumo_usado in insumos:
+        db.session.add(VentaDetalle(
+            venta_id=venta.id,
+            concepto=insumo_usado.insumo_rel.nombre,
+            descripcion=f"{insumo_usado.insumo_rel.unidad_medida}",
+            cantidad=insumo_usado.cantidad,
+            precio_unitario=float(insumo_usado.precio_unitario or 0),
+            subtotal=float(insumo_usado.subtotal or 0),
+            tipo_item='insumo',
+            item_id=insumo_usado.insumo_id
+        ))
+
+    return venta
+
+
+def _reparar_ventas_pendientes_sesiones_tratamiento():
+    """Hace visibles en Caja sesiones atendidas que quedaron sin venta pendiente."""
+    from app.models.consultorio import TratamientoSesion
+
+    sesiones = TratamientoSesion.query.filter(
+        TratamientoSesion.consulta_realizada_id.isnot(None)
+    ).all()
+
+    reparadas = 0
+    for sesion in sesiones:
+        if sesion.venta and sesion.venta.estado in ('pendiente', 'pagada'):
+            continue
+        if Venta.query.filter_by(consulta_id=sesion.consulta_realizada_id).first():
+            continue
+        if not sesion.consulta_realizada:
+            continue
+
+        _crear_venta_pendiente_desde_consulta(
+            sesion.consulta_realizada,
+            current_user.id,
+            observaciones=f'Venta pendiente reparada automaticamente para Sesion {sesion.numero_sesion}'
+        )
+        reparadas += 1
+
+    if reparadas:
+        db.session.commit()
+
 @bp.route('/caja')
 @login_required
 def estado_caja():
@@ -220,6 +380,12 @@ def listar_ventas():
 @login_required
 def ventas_pendientes():
     """Listar ventas pendientes (estado == 'pendiente') para que la cajera las procese"""
+    try:
+        _reparar_ventas_pendientes_sesiones_tratamiento()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception(f"[ventas_pendientes] Error reparando ventas de sesiones: {e}")
+
     ventas = Venta.query.filter_by(estado='pendiente').order_by(Venta.fecha.desc()).all()
     
     # Debug: verificar cuántas ventas hay y sus estados
@@ -228,7 +394,6 @@ def ventas_pendientes():
     current_app.logger.debug(f"[ventas_pendientes] Total ventas en BD: {total_ventas}")
     current_app.logger.debug(f"[ventas_pendientes] Ventas por estado: {ventas_por_estado}")
     current_app.logger.debug(f"[ventas_pendientes] Ventas pendientes encontradas: {len(ventas)}")
-    
     return render_template('facturacion/ventas_pendientes.html', ventas=ventas)
 
 @bp.route('/ventas/nueva', methods=['GET', 'POST'])
@@ -257,6 +422,127 @@ def nueva_venta():
     return render_template('facturacion/nueva_venta.html',
                          caja=caja,
                          consultas_pendientes=consultas_pendientes)
+
+@bp.route('/ventas/facturar-sesion/<int:sesion_id>')
+@login_required
+def facturar_sesion_adelantada(sesion_id):
+    """No crea consultas ficticias: una sesion se cobra cuando ya fue atendida."""
+    from app.models.consultorio import TratamientoSesion
+
+    sesion = TratamientoSesion.query.get_or_404(sesion_id)
+    if sesion.consulta_realizada_id:
+        return redirect(url_for('facturacion.nueva_venta_desde_consulta', consulta_id=sesion.consulta_realizada_id))
+
+    flash('La sesion todavia no fue atendida. Se generara en ventas pendientes al guardar la consulta.', 'warning')
+    return redirect(url_for('facturacion.ventas_pendientes'))
+
+@bp.route('/ventas/tratamiento/<int:tratamiento_id>/preparar-cobro', methods=['POST'])
+@login_required
+def preparar_cobro_tratamiento(tratamiento_id):
+    """Prepara una consulta puente y redirige al flujo normal de facturacion."""
+    from app.models.consultorio import Tratamiento, ConsultaProcedimiento
+    from app.models import Consulta
+    import time
+
+    tratamiento = Tratamiento.query.get_or_404(tratamiento_id)
+    especialidad = tratamiento.consulta.especialidad if tratamiento.consulta else None
+    if not especialidad or especialidad.nombre.lower() != 'tratamiento':
+        flash('El cobro por sesiones solo aplica a la especialidad Tratamiento.', 'warning')
+        return redirect(url_for('facturacion.ventas_pendientes'))
+
+    incluir_inicial = request.form.get('incluir_inicial') == '1'
+    sesion_ids = []
+    for raw_id in request.form.getlist('sesiones[]'):
+        try:
+            sesion_ids.append(int(raw_id))
+        except (TypeError, ValueError):
+            continue
+
+    sesiones = [
+        sesion for sesion in tratamiento.sesiones
+        if sesion.id in sesion_ids and not (sesion.venta and sesion.venta.estado in ('pendiente', 'pagada'))
+    ]
+
+    venta_inicial_pendiente = None
+    if tratamiento.consulta and tratamiento.consulta.ventas:
+        venta_inicial_pendiente = next((v for v in tratamiento.consulta.ventas if v.estado == 'pendiente'), None)
+
+    if incluir_inicial and not sesiones and venta_inicial_pendiente:
+        return redirect(url_for('facturacion.nueva_venta_desde_consulta', consulta_id=tratamiento.consulta_id))
+
+    if not incluir_inicial and not sesiones:
+        flash('Seleccione al menos una sesion pendiente para cobrar.', 'warning')
+        return redirect(url_for('facturacion.ventas_pendientes'))
+
+    consulta = Consulta(
+        paciente_id=tratamiento.paciente_id,
+        medico_id=tratamiento.medico_id,
+        especialidad_id=tratamiento.consulta.especialidad_id,
+        fecha=datetime.utcnow(),
+        motivo='Cobro adelantado de tratamiento',
+        diagnostico=tratamiento.diagnostico_completo,
+        observaciones=COBRO_TRATAMIENTO_PREFIX + ' ' + json.dumps({
+            'tratamiento_id': tratamiento.id,
+            'sesion_ids': [s.id for s in sesiones],
+            'incluir_inicial': incluir_inicial
+        })
+    )
+    db.session.add(consulta)
+    db.session.flush()
+
+    total_procedimientos = 0
+    for sesion in sesiones:
+        for proc in sesion.procedimientos:
+            precio = _resolver_precio_planificado(proc, tratamiento)
+            cantidad = proc.cantidad or 1
+            total_procedimientos += precio * cantidad
+            for _ in range(cantidad):
+                db.session.add(ConsultaProcedimiento(
+                    consulta_id=consulta.id,
+                    procedimiento_id=proc.procedimiento_id,
+                    precio=precio,
+                    observaciones=f"Sesion {sesion.numero_sesion} - cobro adelantado"
+                ))
+
+    precio_inicial = float(especialidad.precio_consulta or 0) if incluir_inicial else 0
+    total = precio_inicial + total_procedimientos
+    iva = total / 11
+    subtotal = total - iva
+    paciente = tratamiento.paciente
+
+    venta = Venta(
+        numero_factura=f"PEND-TRAT-{consulta.id}-{int(time.time())}",
+        timbrado=None,
+        ruc_factura=paciente.ruc or paciente.cedula or '',
+        nombre_factura=paciente.razon_social or paciente.nombre_completo,
+        direccion_facturacion=paciente.direccion_facturacion or paciente.direccion or '',
+        caja_id=None,
+        consulta_id=consulta.id,
+        paciente_id=paciente.id,
+        fecha=datetime.utcnow(),
+        subtotal=subtotal,
+        iva=iva,
+        total=total,
+        estado='pendiente',
+        usuario_registro_id=current_user.id,
+        observaciones='Venta pendiente generada desde plan de tratamiento'
+    )
+    db.session.add(venta)
+    db.session.flush()
+
+    if incluir_inicial and venta_inicial_pendiente:
+        venta_inicial_pendiente.estado = 'anulada'
+        venta_inicial_pendiente.observaciones = (
+            f"Reemplazada por cobro combinado de tratamiento PEND-TRAT consulta {consulta.id}"
+        )
+
+    for sesion in sesiones:
+        sesion.venta_id = venta.id
+        if sesion.estado == 'programada':
+            sesion.estado = 'pendiente_pago'
+
+    db.session.commit()
+    return redirect(url_for('facturacion.nueva_venta_desde_consulta', consulta_id=consulta.id))
 
 @bp.route('/ventas/nueva/<int:consulta_id>')
 @login_required
@@ -289,8 +575,21 @@ def nueva_venta_desde_consulta(consulta_id):
     paciente = consulta.paciente
     especialidad = Especialidad.query.get(consulta.especialidad_id)
     
-    # Calcular totales
-    precio_consulta = float(especialidad.precio_consulta) if especialidad.precio_consulta else 0
+    # Obtener datos de tratamiento si es una sesion o una consulta puente de cobro
+    from app.models.consultorio import Tratamiento, TratamientoSesion
+    sesion_actual = TratamientoSesion.query.filter_by(consulta_realizada_id=consulta.id).first()
+    if not sesion_actual and consulta.cita_id:
+        sesion_actual = TratamientoSesion.query.filter_by(cita_id=consulta.cita_id).first()
+    tratamiento = sesion_actual.tratamiento if sesion_actual else None
+    metadata_tratamiento = _metadata_cobro_tratamiento(consulta)
+    if metadata_tratamiento and metadata_tratamiento.get('tratamiento_id'):
+        tratamiento = Tratamiento.query.get(metadata_tratamiento.get('tratamiento_id'))
+
+    # Calcular totales. Las sesiones cobran los procedimientos planificados, no otra consulta.
+    if metadata_tratamiento is not None:
+        precio_consulta = float(especialidad.precio_consulta or 0) if metadata_tratamiento.get('incluir_inicial') else 0
+    else:
+        precio_consulta = 0 if sesion_actual else (float(especialidad.precio_consulta) if especialidad.precio_consulta else 0)
     
     # Obtener procedimientos realizados
     procedimientos = ConsultaProcedimiento.query.filter_by(consulta_id=consulta.id).all()
@@ -309,7 +608,6 @@ def nueva_venta_desde_consulta(consulta_id):
     
     # Obtener formas de pago disponibles
     formas_pago = FormaPago.query.filter_by(activo=True).all()
-    
     return render_template('facturacion/detalle_facturacion.html',
                          consulta=consulta,
                          paciente=paciente,
@@ -323,7 +621,9 @@ def nueva_venta_desde_consulta(consulta_id):
                          iva=iva,
                          total=total,
                          caja=caja,
-                         formas_pago=formas_pago)
+                         formas_pago=formas_pago,
+                         sesion_actual=sesion_actual,
+                         tratamiento=tratamiento)
 @bp.route('/ventas/facturar/<int:consulta_id>', methods=['POST'])
 @login_required
 def procesar_factura(consulta_id):
@@ -387,7 +687,16 @@ def procesar_factura(consulta_id):
         # Calcular totales
         paciente = consulta.paciente
         especialidad = Especialidad.query.get(consulta.especialidad_id)
-        precio_consulta = float(especialidad.precio_consulta) if especialidad.precio_consulta else 0
+        from app.models.consultorio import TratamientoSesion
+        sesion_actual = TratamientoSesion.query.filter_by(consulta_realizada_id=consulta.id).first()
+        if not sesion_actual and consulta.cita_id:
+            sesion_actual = TratamientoSesion.query.filter_by(cita_id=consulta.cita_id).first()
+        metadata_tratamiento = _metadata_cobro_tratamiento(consulta)
+
+        if metadata_tratamiento is not None:
+            precio_consulta = float(especialidad.precio_consulta or 0) if metadata_tratamiento.get('incluir_inicial') else 0
+        else:
+            precio_consulta = 0 if sesion_actual else (float(especialidad.precio_consulta) if especialidad.precio_consulta else 0)
         
         procedimientos = ConsultaProcedimiento.query.filter_by(consulta_id=consulta.id).all()
         total_procedimientos = sum(float(p.precio) for p in procedimientos)
@@ -414,7 +723,7 @@ def procesar_factura(consulta_id):
             venta.timbrado = timbrado
             venta.ruc_factura = ruc_factura
             venta.nombre_factura = nombre_factura
-            venta.direccion_factura = direccion_factura
+            venta.direccion_facturacion = direccion_factura
             venta.caja_id = caja.id
             venta.paciente_id = consulta.paciente_id
             venta.subtotal = subtotal
@@ -437,7 +746,7 @@ def procesar_factura(consulta_id):
                 timbrado=timbrado,
                 ruc_factura=ruc_factura,
                 nombre_factura=nombre_factura,
-                direccion_factura=direccion_factura,
+                direccion_facturacion=direccion_factura,
                 caja_id=caja.id,
                 consulta_id=consulta.id,
                 paciente_id=consulta.paciente_id,
@@ -586,6 +895,17 @@ def procesar_factura(consulta_id):
                 current_app.logger.debug(f"[procesar_factura] About to commit venta id={venta.id if 'venta' in locals() else 'n/a'} pagos_count={len(pagos_list) if 'pagos_list' in locals() else 'n/a'} total={total if 'total' in locals() else 'n/a'}")
             except Exception:
                 pass
+
+            if sesion_actual:
+                sesion_actual.venta_id = venta.id
+                sesion_actual.estado = 'facturada'
+            elif metadata_tratamiento and metadata_tratamiento.get('sesion_ids'):
+                sesiones_pagadas = TratamientoSesion.query.filter(
+                    TratamientoSesion.id.in_(metadata_tratamiento.get('sesion_ids'))
+                ).all()
+                for sesion in sesiones_pagadas:
+                    sesion.venta_id = venta.id
+                    sesion.estado = 'facturada' if sesion.consulta_realizada_id else 'pagada_adelantada'
 
             db.session.commit()
             

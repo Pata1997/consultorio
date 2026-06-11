@@ -1,0 +1,79 @@
+1. Análisis del Requerimiento y Recomendaciones Adoptadas
+El flujo propuesto se divide en tres etapas principales: la creación del tratamiento, la atención de las sesiones y la facturación.
+
+A. Primera Cita (Creación del Tratamiento)
+
+Recepción: Agenda una cita con la especialidad "Tratamiento".
+Consultorio: Al atender, el médico usa el nuevo modal "Plan de Tratamiento" para ingresar el diagnóstico maestro y planificar las sesiones (fecha, hora y procedimientos por sesión).
+Guardado y Agendamiento Automático: La consulta actual se guarda (Costo 0). Se generan automáticamente las futuras Citas en el agendamiento para cada sesión.
+Recomendación Adoptada: Las citas para las sesiones futuras se crearán automáticamente con el estado 'confirmada'. Al ser agendadas directamente desde el consultorio como parte de un tratamiento pactado, no requieren un paso extra de confirmación por recepción. Su "Motivo" dirá automáticamente "Sesión X - Tratamiento".
+Facturación: Se genera la venta pendiente por la "Consulta Gratuita".
+B. Atención de una Sesión Subsecuente
+
+Dashboard Médico: El médico verá la cita con el motivo "Sesión 1 - Tratamiento".
+Consultorio: Cuando el médico atiende la cita de la Sesión 1 (/consultorio/consultas/nueva/X):
+Precarga automática: El campo Diagnóstico mostrará el diagnóstico original del tratamiento y los procedimientos planeados para esta sesión.
+El médico puede agregar Insumos o Nuevos Procedimientos extra si fueron necesarios durante esa atención.
+Guardado y Venta: Al guardar, se actualiza el estado de la sesión a "Realizada".
+Recomendación Adoptada: Cada sesión atendida genera su propia "Venta Pendiente". Esto es crucial porque permite que si el médico usó insumos adicionales ese día, se carguen directamente a la venta de ese día sin mezclar la cuenta de todo el tratamiento.
+C. Facturación Modular (Caja)
+
+Cuando el cajero hace clic en "Facturar" sobre cualquier venta pendiente vinculada a un paciente en tratamiento:
+Se abre el Modal del Estado del Tratamiento. Este modal le sirve al cajero como un resumen de qué está pagando el paciente.
+El modal muestra todas las sesiones del tratamiento con su estado actual:
+Consulta Gratuita (Cobrado - Deshabilitado)
+Sesión 1 (Pendiente - Seleccionable)
+Sesión 2 (Programada - Deshabilitado)
+El cajero selecciona la sesión que está lista para cobrarse (la de ese día), y el sistema lo lleva a la pantalla de cobro normal (/facturacion/ventas/nueva/X) para cerrar la factura.
+2. Modelos de Base de Datos (Nuevas Tablas a crear)
+Se agregarán estos modelos a la base de datos:
+
+python
+
+
+class Tratamiento(db.Model):
+    """Modelo maestro para el plan de tratamiento completo"""
+    id = db.Column(db.Integer, primary_key=True)
+    consulta_id = db.Column(db.Integer, db.ForeignKey('consultas.id')) # Consulta de diagnóstico (Gratuita)
+    paciente_id = db.Column(db.Integer, db.ForeignKey('pacientes.id'))
+    medico_id = db.Column(db.Integer, db.ForeignKey('medicos.id'))
+    diagnostico_completo = db.Column(db.Text)
+    # ... otros campos ...
+class TratamientoSesion(db.Model):
+    """Modelo para cada sesión individual dentro del tratamiento"""
+    id = db.Column(db.Integer, primary_key=True)
+    tratamiento_id = db.Column(db.Integer, db.ForeignKey('tratamientos.id'))
+    numero_sesion = db.Column(db.Integer) # 1, 2, 3...
+    cita_id = db.Column(db.Integer, db.ForeignKey('citas.id')) # Cita en agenda
+    venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id')) # Venta asociada
+    fecha_programada = db.Column(db.Date)
+    hora_programada = db.Column(db.Time)
+    estado = db.Column(db.String(20), default='programada') 
+    # ... otros campos ...
+class TratamientoSesionProcedimiento(db.Model):
+    """Procedimientos específicos planificados para una sesión"""
+    id = db.Column(db.Integer, primary_key=True)
+    sesion_id = db.Column(db.Integer, db.ForeignKey('tratamiento_sesiones.id'))
+    procedimiento_id = db.Column(db.Integer, db.ForeignKey('procedimientos.id'))
+    precio_planificado = db.Column(db.Numeric(10, 2))
+    # ... otros campos ...
+3. Fases de Implementación Técnica
+Fase 1: Backend (Modelos y Base de Datos)
+
+Agregar las clases Tratamiento, TratamientoSesion, TratamientoSesionProcedimiento.
+Actualizar la base de datos para que existan estas tablas.
+Fase 2: Consultorio (Planificación de la primera cita)
+
+Modificar la pantalla de nueva consulta para ocultar el cuadro de diagnóstico normal si la especialidad es "Tratamiento".
+Crear un Modal interactivo para cargar el "Plan de Tratamiento" y agregar las sesiones dinámicamente con un buscador de procedimientos.
+En el backend, al guardar, crear automáticamente todas las citas futuras en la agenda.
+Fase 3: Consultorio (Atención de las Sesiones agendadas)
+
+Detectar cuando el médico abre una cita que pertenece a una sesión.
+Precargar en pantalla el diagnóstico que se le hizo originalmente y los procedimientos que le tocan hacerse ese día.
+Al guardar esta consulta, enlazarla a la sesión correspondiente y crear su propia venta pendiente.
+Fase 4: Facturación (Caja)
+
+Modificar la pantalla de "Ventas Pendientes" para interceptar el botón "Facturar".
+Abrir el Modal que muestre la lista de sesiones, deshabilitando las que ya se pagaron y permitiendo elegir la que se va a pagar hoy.
+Al elegirla, enviar al cajero a la pantalla de cobro normal con los datos exactos de esa sesión.

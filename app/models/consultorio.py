@@ -225,6 +225,16 @@ class Procedimiento(db.Model):
     def __repr__(self):
         return f'<Procedimiento {self.nombre}>'
 
+    def get_precio_para(self, medico_id=None, especialidad_id=None):
+        """Resuelve el precio según prioridad: médico > especialidad > defecto"""
+        if medico_id:
+            pp = ProcedimientoPrecio.query.filter_by(procedimiento_id=self.id, medico_id=medico_id).first()
+            if pp: return pp.precio
+        if especialidad_id:
+            pp = ProcedimientoPrecio.query.filter_by(procedimiento_id=self.id, especialidad_id=especialidad_id, medico_id=None).first()
+            if pp: return pp.precio
+        return self.precio
+
 
 class ProcedimientoPrecio(db.Model):
     """Precios por procedimiento por médico o por especialidad.
@@ -267,3 +277,57 @@ class ConsultaProcedimiento(db.Model):
     
     def __repr__(self):
         return f'<ConsultaProcedimiento C:{self.consulta_id} P:{self.procedimiento_id}>'
+
+class Tratamiento(db.Model):
+    """Modelo maestro para el plan de tratamiento completo generado en la especialidad 'Tratamiento'"""
+    __tablename__ = 'tratamientos'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    consulta_id = db.Column(db.Integer, db.ForeignKey('consultas.id'), nullable=False) # Consulta de diagnóstico (Gratuita)
+    paciente_id = db.Column(db.Integer, db.ForeignKey('pacientes.id'), nullable=False)
+    medico_id = db.Column(db.Integer, db.ForeignKey('medicos.id'), nullable=False)
+    diagnostico_completo = db.Column(db.Text, nullable=False)
+    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
+    estado = db.Column(db.String(20), default='activo') # activo, completado, cancelado
+
+    # Relaciones
+    sesiones = db.relationship('TratamientoSesion', backref='tratamiento', lazy=True, cascade='all, delete-orphan')
+    consulta = db.relationship('Consulta', foreign_keys=[consulta_id], backref=db.backref('tratamiento_asociado', uselist=False))
+    paciente = db.relationship('Paciente', foreign_keys=[paciente_id])
+    medico = db.relationship('Medico', foreign_keys=[medico_id])
+
+class TratamientoSesion(db.Model):
+    """Modelo para cada sesión individual planificada dentro del tratamiento"""
+    __tablename__ = 'tratamiento_sesiones'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    tratamiento_id = db.Column(db.Integer, db.ForeignKey('tratamientos.id'), nullable=False)
+    numero_sesion = db.Column(db.Integer, nullable=False) # 1, 2, 3...
+    
+    cita_id = db.Column(db.Integer, db.ForeignKey('citas.id'), nullable=True) # Cita bloqueada en la agenda
+    consulta_realizada_id = db.Column(db.Integer, db.ForeignKey('consultas.id'), nullable=True) # Consulta generada el día que viene a la sesión
+    venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id'), nullable=True) # Venta pendiente generada
+    
+    fecha_programada = db.Column(db.Date, nullable=False)
+    hora_programada = db.Column(db.Time, nullable=False)
+    estado = db.Column(db.String(20), default='programada') # programada, realizada, facturada, cancelada
+    
+    # Relaciones
+    procedimientos = db.relationship('TratamientoSesionProcedimiento', backref='sesion', lazy=True, cascade='all, delete-orphan')
+    cita = db.relationship('Cita', foreign_keys=[cita_id], backref=db.backref('sesion_tratamiento', uselist=False))
+    consulta_realizada = db.relationship('Consulta', foreign_keys=[consulta_realizada_id])
+    venta = db.relationship('Venta', foreign_keys=[venta_id])
+
+class TratamientoSesionProcedimiento(db.Model):
+    """Procedimientos específicos que se planifican realizar en una sesión"""
+    __tablename__ = 'tratamiento_sesion_procedimientos'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    sesion_id = db.Column(db.Integer, db.ForeignKey('tratamiento_sesiones.id'), nullable=False)
+    procedimiento_id = db.Column(db.Integer, db.ForeignKey('procedimientos.id'), nullable=False)
+    precio_planificado = db.Column(db.Numeric(10, 2), nullable=False)
+    cantidad = db.Column(db.Integer, default=1)
+    
+    # Relaciones
+    procedimiento = db.relationship('Procedimiento', foreign_keys=[procedimiento_id])
+

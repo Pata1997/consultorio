@@ -39,9 +39,15 @@
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             {% if v.consulta_id %}
-                                            <a href="{{ url_for('facturacion.nueva_venta_desde_consulta', consulta_id=v.consulta_id) }}" class="btn btn-outline-primary" title="Facturar">
-                                                <i class="bi bi-cash-stack"></i> Facturar
-                                            </a>
+                                                {% if (v.consulta and v.consulta.tratamiento_asociado) or (v.consulta and v.consulta.cita and v.consulta.cita.sesion_tratamiento) %}
+                                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalSesiones{{ v.consulta_id }}" title="Facturar Tratamiento">
+                                                    <i class="bi bi-cash-stack"></i> Facturar
+                                                </button>
+                                                {% else %}
+                                                <a href="{{ url_for('facturacion.nueva_venta_desde_consulta', consulta_id=v.consulta_id) }}" class="btn btn-outline-primary" title="Facturar">
+                                                    <i class="bi bi-cash-stack"></i> Facturar
+                                                </a>
+                                                {% endif %}
                                             {% else %}
                                             <a href="{{ url_for('facturacion.listar_ventas') }}" class="btn btn-outline-secondary" title="Ver">
                                                 <i class="bi bi-eye"></i> Ver
@@ -63,4 +69,126 @@
         </div>
     </div>
 </div>
+
+{% for v in ventas %}
+    {% set trat = none %}
+    {% if v.consulta and v.consulta.tratamiento_asociado %}
+        {% set trat = v.consulta.tratamiento_asociado %}
+    {% elif v.consulta and v.consulta.cita and v.consulta.cita.sesion_tratamiento %}
+        {% set trat = v.consulta.cita.sesion_tratamiento.tratamiento %}
+    {% endif %}
+
+    {% if trat %}
+    <div class="modal fade" id="modalSesiones{{ v.consulta_id }}" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ url_for('facturacion.preparar_cobro_tratamiento', tratamiento_id=trat.id) }}" class="form-cobro-tratamiento">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Cobrar tratamiento</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="small text-muted">Seleccione una o varias sesiones. Luego se abrira la pantalla normal de facturacion.</p>
+                        <div class="list-group">
+                            {% set inicial = namespace(venta=None, pagada=false) %}
+                            {% for venta_inicial in trat.consulta.ventas %}
+                                {% if venta_inicial.estado == 'pendiente' %}
+                                    {% set inicial.venta = venta_inicial %}
+                                {% elif venta_inicial.estado == 'pagada' %}
+                                    {% set inicial.pagada = true %}
+                                {% endif %}
+                            {% endfor %}
+                            {% if inicial.venta %}
+                            <label class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>
+                                    <input class="form-check-input me-2 check-cobro" type="checkbox" name="incluir_inicial" value="1">
+                                    <strong>Consulta inicial</strong>
+                                </span>
+                                <span class="badge bg-primary rounded-pill">{{ inicial.venta.total|format_currency }} Gs.</span>
+                            </label>
+                            {% elif inicial.pagada %}
+                            <div class="list-group-item list-group-item-success d-flex justify-content-between align-items-center">
+                                <strong>Consulta inicial</strong>
+                                <span class="badge bg-success rounded-pill">Pagado</span>
+                            </div>
+                            {% endif %}
+
+                            {% for sesion in trat.sesiones|sort(attribute='numero_sesion') %}
+                                {% set subtotal_sesion = namespace(val=0) %}
+                                {% set nombres = namespace(val=[]) %}
+                                {% for proc in sesion.procedimientos %}
+                                    {% set precio_proc = proc.precio_planificado if proc.precio_planificado and proc.precio_planificado > 0 else proc.procedimiento.get_precio_para(trat.medico_id, trat.consulta.especialidad_id) %}
+                                    {% set subtotal_sesion.val = subtotal_sesion.val + ((precio_proc or 0) * (proc.cantidad or 1)) %}
+                                    {% set nombres.val = nombres.val + [proc.procedimiento.nombre] %}
+                                {% endfor %}
+
+                                {% if sesion.venta and sesion.venta.estado == 'pagada' %}
+                                    <div class="list-group-item list-group-item-success d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>Sesion {{ sesion.numero_sesion }}</strong><br>
+                                            <small>{{ nombres.val|join(', ') or 'Sin procedimientos' }}</small><br>
+                                            <small>{{ sesion.fecha_programada.strftime('%d/%m/%Y') }}</small>
+                                        </div>
+                                        <span class="badge bg-success rounded-pill">Pagado</span>
+                                    </div>
+                                {% elif sesion.venta and sesion.venta.estado == 'pendiente' and sesion.venta.consulta_id %}
+                                    <a href="{{ url_for('facturacion.nueva_venta_desde_consulta', consulta_id=sesion.venta.consulta_id) }}" class="list-group-item list-group-item-action list-group-item-warning d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>Sesion {{ sesion.numero_sesion }}</strong> <small class="text-muted">(cobro pendiente)</small><br>
+                                            <small>{{ nombres.val|join(', ') or 'Sin procedimientos' }}</small><br>
+                                            <small>{{ sesion.fecha_programada.strftime('%d/%m/%Y') }}</small>
+                                        </div>
+                                        <span class="badge bg-warning text-dark rounded-pill">{{ sesion.venta.total|format_currency }} Gs.</span>
+                                    </a>
+                                {% elif subtotal_sesion.val <= 0 %}
+                                    <div class="list-group-item d-flex justify-content-between align-items-center text-muted">
+                                        <div>
+                                            <strong>Sesion {{ sesion.numero_sesion }}</strong><br>
+                                            <small>Sin procedimientos planificados</small><br>
+                                            <small>{{ sesion.fecha_programada.strftime('%d/%m/%Y') }}</small>
+                                        </div>
+                                        <span class="badge bg-danger rounded-pill">Sin precio</span>
+                                    </div>
+                                {% else %}
+                                    <label class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span>
+                                            <input class="form-check-input me-2 check-cobro" type="checkbox" name="sesiones[]" value="{{ sesion.id }}">
+                                            <strong>Sesion {{ sesion.numero_sesion }}</strong>
+                                            <small class="text-muted">({{ sesion.estado }})</small><br>
+                                            <small class="ms-4">{{ nombres.val|join(', ') or 'Sin procedimientos' }}</small><br>
+                                            <small class="ms-4">{{ sesion.fecha_programada.strftime('%d/%m/%Y') }}</small>
+                                        </span>
+                                        <span class="badge bg-secondary rounded-pill">{{ subtotal_sesion.val|format_currency }} Gs.</span>
+                                    </label>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-primary btn-cobrar-todo">
+                            <i class="bi bi-check2-square"></i> Cobrar todo
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-cash-stack"></i> Cobrar seleccionadas
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+{% endfor %}
+
+<script>
+document.addEventListener('click', function (event) {
+    const button = event.target.closest('.btn-cobrar-todo');
+    if (!button) return;
+
+    const form = button.closest('.form-cobro-tratamiento');
+    form.querySelectorAll('.check-cobro').forEach(function (input) {
+        input.checked = true;
+    });
+    form.submit();
+});
+</script>
 {% endblock %}

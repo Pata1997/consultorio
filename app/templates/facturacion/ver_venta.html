@@ -59,7 +59,7 @@
                                     {% else %}
                                     <p class="mb-1"><strong>CI:</strong> {{ venta.paciente.cedula }}</p>
                                     {% endif %}
-                                    <p class="mb-1"><strong>Dirección:</strong> {{ venta.direccion_factura or venta.paciente.direccion or 'N/A' }}</p>
+                                    <p class="mb-1"><strong>Dirección:</strong> {{ venta.direccion_facturacion or venta.paciente.direccion or 'N/A' }}</p>
                                 </div>
                             </div>
                         </div>

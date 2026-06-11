@@ -55,6 +55,8 @@ class Venta(db.Model):
     paciente = db.relationship('Paciente', foreign_keys=[paciente_id], lazy=True)
     # Relación con usuario que registró la venta
     usuario_registro_rel = db.relationship('Usuario', foreign_keys=[usuario_registro_id], lazy=True)
+    # Relación con consulta
+    consulta = db.relationship('Consulta', foreign_keys=[consulta_id], backref='ventas', lazy=True)
     
     @property
     def saldo_pendiente(self):

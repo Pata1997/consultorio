@@ -29,7 +29,7 @@
                 <p><strong>Médico:</strong> {{ consulta.medico.nombre_completo if consulta.medico else '' }}</p>
                 <hr>
                 <h5>Diagnóstico</h5>
-                <p>{{ consulta.diagnostico }}</p>
+                <p style="white-space: pre-wrap;">{{ diagnostico_mostrar or 'Sin diagnóstico' }}</p>
                 <h5>Observaciones</h5>
                 <p>{{ consulta.observaciones or 'Sin observaciones' }}</p>
 

@@ -3,7 +3,7 @@ from app.models.usuario import Usuario, Paciente, Especialidad, Medico, MedicoEs
 from app.models.consultorio import (
     Cita, Consulta, Receta, OrdenEstudio, Insumo, InsumoEspecialidad,
     ConsultaInsumo, MovimientoInsumo, Procedimiento, ConsultaProcedimiento,
-    Odontograma
+    Odontograma, Tratamiento, TratamientoSesion, TratamientoSesionProcedimiento
 )
 from app.models.consultorio import ProcedimientoPrecio
 from app.models.facturacion import (
@@ -17,7 +17,7 @@ __all__ = [
     'Usuario', 'Paciente', 'Especialidad', 'Medico', 'MedicoEspecialidad', 'HorarioAtencion',
     'Cita', 'Consulta', 'Receta', 'OrdenEstudio', 'Insumo', 'InsumoEspecialidad',
     'ConsultaInsumo', 'MovimientoInsumo', 'Procedimiento', 'ConsultaProcedimiento', 'Odontograma',
-    'ProcedimientoPrecio',
+    'ProcedimientoPrecio', 'Tratamiento', 'TratamientoSesion', 'TratamientoSesionProcedimiento',
     'Caja', 'Venta', 'VentaDetalle', 'FormaPago', 'Pago',
     'Vacacion', 'Permiso', 'Asistencia', 'ConfiguracionConsultorio',
     'AuditLog'
